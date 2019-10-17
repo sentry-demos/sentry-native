@@ -1,15 +1,26 @@
 # Overview
-## Must Read
+#### NEXT DEVELOPMENT:
+- <ORG> slug and <PROJECT> in Makefile for 'make commands to use
+```
+# SENTRY_ORG=testorg-az ?
+# SENTRY_PROJECT=will-frontend-react ?
+# ^^ would need to work when you `cd sentry-native/gen_macosx`
+```
+- resolve `sentry_set_fingerprint("foo", "bar", NULL);` in example_crashpad.c
+- update on including source bundles
+- create_release, associate_commits
+
+### Must Read
 
 use https://github.com/getsentry/sentry-native when ready to implement this in your real code. this `sentry-demos/sentry-native` is an example implementation (demo) of `getsentry/sentry-native`
+
+`example.c` generates **two types of events** and sends them simultaneously. One is defined by sentry-native as a Event Message. The second is a Native Crash, which still gets sent as an event.
 
 This project makes use of **sentry-native**, the Sentry SDK for Native Crash Reporting https://github.com/getsentry/sentry-native
 
 This project makes use of **sentry-native** in its packaged release form. It is referenced as a submodule in this project but you will download it as a distribution .zip from getsentry/sentry-native when you're ready to use it
 
 This project is not for developing or testing locally, so if the standalone distribution package doesn't fit your needs, then go to https://github.com/getsentry/sentry-native#development
-
-`example.c` generates **two types of events** and sends them simultaneously. One is defined by sentry-native as a Event Message. The second is a Native Crash, which still gets sent as an event.
 
 `sentry-native` in the news https://blog.sentry.io/2019/09/26/fixing-native-apps-with-sentry
 
