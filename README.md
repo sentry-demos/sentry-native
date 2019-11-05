@@ -30,9 +30,9 @@ This project is not for developing or testing locally, so if the standalone dist
 1. `make` builds the source files, application, uploads symbols
 2. `make run` runs the bin/example  
 or...  
-1. `make bin/example`
+1. `make bin/example` or `make -j4 bin/example`
 2. `make upload_debug_files`
-3. `make run`  
+3. `make run`
 
 
 ```
