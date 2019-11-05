@@ -32,7 +32,16 @@ This project is not for developing or testing locally, so if the standalone dist
 or...  
 1. `make bin/example`
 2. `make upload_debug_files`
-3. `make run`
+3. `make run`  
+
+
+```
+sentry-cli upload-dif --org testorg-az --project sentry-native bin/{sentry_crashpad.dylib,sentry_crashpad.dSYM,example,example.dSYM}
+...became
+sentry-cli upload-dif --org testorg-az --project sentry-native bin/
+...or else it would miss some files(3)
+...but now 'example' won't upload, only the other 2. and still no .dSYM files
+```
 ## Windows
 TODO `set` DSN
 
