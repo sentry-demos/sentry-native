@@ -1,4 +1,5 @@
 # Overview
+`git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`  
 #### NEXT DEVELOPMENT:
 - upload Debug Files by `make` command, is that missing from Makefile???
 - resolve `sentry_set_fingerprint("foo", "bar", NULL);` in example_crashpad.c
