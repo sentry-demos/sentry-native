@@ -54,7 +54,7 @@ void send_event(void) {
     sentry_value_set_by_key(contexts, "os", os);
 
     sentry_value_t event = sentry_value_new_event();
-    sentry_value_set_by_key(event, "message", sentry_value_new_string("Invariant Violation"));
+    sentry_value_set_by_key(event, "message", sentry_value_new_string("Invariant Violation - Message"));
     sentry_value_set_by_key(event, "contexts", contexts);
     sentry_capture_event(event);
 }

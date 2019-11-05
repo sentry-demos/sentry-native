@@ -28,8 +28,11 @@ This project is not for developing or testing locally, so if the standalone dist
 
 ## Mac
 1. `make` builds the source files, application, uploads symbols
-2. `make run` runs the bin/example
-
+2. `make run` runs the bin/example  
+or...  
+1. `make bin/example`
+2. `make upload_debug_files`
+3. `make run`
 ## Windows
 TODO `set` DSN
 

@@ -22,6 +22,8 @@ sentry-makefile: sentry-native/premake/Makefile
 sentry-native/premake/Makefile:
 	$(MAKE) -C sentry-native fetch configure
 
+upload_debug_files:
+	sentry-cli upload-dif --org testorg-az --project sentry-native bin/{sentry_crashpad.dylib,sentry_crashpad.dSYM,example,example.dSYM}
 run:
 	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example
 .PHONY: run
