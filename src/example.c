@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "sentry.h"
+#include "sentry.h" // references sentry-native
+// /bin has crashpad binary executables
 
 #ifdef _WIN32
 const char *handler_path = "bin/crashpad_handler.exe";
@@ -70,8 +71,10 @@ int main(void) {
     //                               "application.log");
 
     sentry_init(options);
-    startup();
     send_event();
 
     sentry_shutdown();
+
+    // normally happens before sentry_shutdown
+    startup();
 }

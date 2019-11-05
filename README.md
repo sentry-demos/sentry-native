@@ -1,14 +1,15 @@
 # Overview
 #### NEXT DEVELOPMENT:
-- <ORG> slug and <PROJECT> in Makefile for 'make commands to use
-```
-# SENTRY_ORG=testorg-az ?
-# SENTRY_PROJECT=will-frontend-react ?
-# ^^ would need to work when you `cd sentry-native/gen_macosx`
-```
+- upload Debug Files by `make` command, is that missing from Makefile???
 - resolve `sentry_set_fingerprint("foo", "bar", NULL);` in example_crashpad.c
 - update on including source bundles
 - create_release, associate_commits
+    ```
+    <ORG> slug and <PROJECT> in Makefile for 'make commands to use
+    # SENTRY_ORG=testorg-az ?
+    # SENTRY_PROJECT=will-frontend-react ?
+    # ^^ would need to work when you `cd sentry-native/gen_macosx`
+    ```
 
 ### Must Read
 
