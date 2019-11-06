@@ -1,3 +1,8 @@
+SENTRY_ORG=testorg-az
+SENTRY_PROJECT=frontend-react
+VERSION=`sentry-cli releases propose-version`
+PREFIX=static/js
+
 all: bin/example
 .PHONY: all
 
@@ -22,8 +27,21 @@ sentry-makefile: sentry-native/premake/Makefile
 sentry-native/premake/Makefile:
 	$(MAKE) -C sentry-native fetch configure
 
+
+
+setup_release: create_release associate_commits upload_debug_files
+
+create_release:
+	sentry-cli releases -o $(SENTRY_ORG) new -p $(SENTRY_PROJECT) $(VERSION)
+
+associate_commits:
+	sentry-cli releases -o $(SENTRY_ORG) -p $(SENTRY_PROJECT) set-commits --auto $(VERSION)
+
 upload_debug_files:
 	sentry-cli upload-dif --org testorg-az --project sentry-native bin/
+
+
+
 run:
 	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example
 .PHONY: run

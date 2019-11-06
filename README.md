@@ -26,10 +26,7 @@ This project is not for developing or testing locally, so if the standalone dist
 `sentry-native` in the news https://blog.sentry.io/2019/09/26/fixing-native-apps-with-sentry
 
 ## Mac
-1. `make` builds the source files, application, uploads symbols
-2. `make run` runs the bin/example  
-or...  
-1. `make bin/example` or `make -j4 bin/example`
+1. `make bin/example` 
 2. `make upload_debug_files`
 3. `make run`
 
@@ -74,3 +71,19 @@ The code used in `example.c` for causing a native crash is
 memset((char *)0x0, 1, 100);
 ```
 Why memset causes native crashes, http://www.cplusplus.com/reference/cstring/memset/
+
+## TODO Remove
+```
+1. `make` builds the source files, application, uploads symbols
+2. `make run` runs the bin/example  
+or...  
+```
+
+```
+where to put the -j4
+```
+
+
+```
+.PHONY for upload_debug_files ?
+```
