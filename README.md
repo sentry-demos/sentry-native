@@ -1,5 +1,6 @@
 # Overview
-`git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`  
+1. fork https://github.com/sentry-demos/sentry-native
+2. `git clone --recurse-submodules git@github.com:<your_fork>/sentry-native.git`  
 #### NEXT DEVELOPMENT 11/6/19
 - resolve `sentry_set_fingerprint("foo", "bar", NULL);` in example_crashpad.c
 - update on including source bundles
