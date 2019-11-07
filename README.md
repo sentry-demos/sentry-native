@@ -11,6 +11,8 @@
     # SENTRY_PROJECT=will-frontend-react ?
     # ^^ would need to work when you `cd sentry-native/gen_macosx`
     ```
+- TODO - how to get the release '54fd' how/where was it set? this affects the $VERSION variable in Makefile
+- TODO - filename in commit has to match the filename+path in the stack frame
 
 ### Must Read
 

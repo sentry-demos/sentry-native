@@ -64,7 +64,14 @@ int main(void) {
 
     sentry_options_set_handler_path(options, handler_path);
     sentry_options_set_environment(options, "Production");
+    
+    // How to get this value from $VERSION in Makefile?
+    // https://en.cppreference.com/w/cpp/utility/program/getenv and http://www.cplusplus.com/reference/cstdlib/getenv/
+    // https://stackoverflow.com/questions/24963654/accessing-makefile-variables-in-code
+    // https://stackoverflow.com/questions/30291476/how-to-use-a-variable-from-a-makefile-in-ifdef-in-c-file
+    // sentry_options_set_release(options, $VERSION);
     sentry_options_set_release(options, "5fd7a6cd");
+
     sentry_options_set_database_path(options, "sentry-db");
     sentry_options_set_debug(options, 1);
     // sentry_options_add_attachment(options, "application.log",
