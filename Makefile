@@ -7,7 +7,7 @@ all: bin/example
 .PHONY: all
 
 bin/example: prereqs src/example.c
-	$(CC) -o $@ -DSENRTY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
+	$(CC) -g -o $@ -DSENRTY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
 
 prereqs: bin/libsentry_crashpad.dylib bin/crashpad_handler
 .PHONY: prereqs
@@ -15,10 +15,12 @@ prereqs: bin/libsentry_crashpad.dylib bin/crashpad_handler
 bin/libsentry_crashpad.dylib: sentry-makefile
 	$(MAKE) -C sentry-native/premake sentry_crashpad
 	cp sentry-native/premake/bin/Release/libsentry_crashpad.dylib bin
+	cp -R sentry-native/premake/bin/Release/libsentry_crashpad.dylib.dSYM bin
 
 bin/crashpad_handler: sentry-makefile
 	$(MAKE) -C sentry-native/premake crashpad_handler
 	cp sentry-native/premake/bin/Release/crashpad_handler bin
+	cp -R sentry-native/premake/bin/Release/crashpad_handler.dSYM bin
 
 # not needed for bundled sentry-native download
 sentry-makefile: sentry-native/premake/Makefile
