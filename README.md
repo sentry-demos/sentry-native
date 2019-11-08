@@ -3,6 +3,8 @@
 
 ### Must Read
 
+you need version `sentry-cli 1.49.0z` https://github.com/getsentry/sentry-cli/releases/ and https://docs.sentry.io/cli/installation/  
+
 use https://github.com/getsentry/sentry-native when ready to implement this in your real code. this `sentry-demos/sentry-native` is an example implementation (demo) of `getsentry/sentry-native`
 
 `example.c` generates **two types of events** and sends them simultaneously. One is defined by sentry-native as a Event Message. The second is a Native Crash, which still gets sent as an event.
