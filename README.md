@@ -4,6 +4,7 @@
 ### Must Read
 
 you need version `sentry-cli 1.49.0z` https://github.com/getsentry/sentry-cli/releases/ and https://docs.sentry.io/cli/installation/  
+`yarn global add @sentry/cli`  
 
 use https://github.com/getsentry/sentry-native when ready to implement this in your real code. this `sentry-demos/sentry-native` is an example implementation (demo) of `getsentry/sentry-native`
 
