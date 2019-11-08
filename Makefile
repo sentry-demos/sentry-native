@@ -1,6 +1,7 @@
 SENTRY_ORG=testorg-az
 SENTRY_PROJECT=frontend-react
 PREFIX=static/js
+# TODO ideally it should be:
 # VERSION=`sentry-cli releases propose-version`
 VERSION=5fd7a6cd
 
@@ -36,6 +37,7 @@ setup_release: create_release associate_commits upload_debug_files
 create_release:
 	sentry-cli releases -o $(SENTRY_ORG) new -p $(SENTRY_PROJECT) $(VERSION)
 
+# TODO what to do here?
 associate_commits:
 	sentry-cli releases -o $(SENTRY_ORG) -p $(SENTRY_PROJECT) set-commits --auto $(VERSION)
 

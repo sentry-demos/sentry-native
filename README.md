@@ -1,17 +1,5 @@
 # Overview
 1. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`  
-#### NEXT DEVELOPMENT 11/6/19
-- resolve `sentry_set_fingerprint("foo", "bar", NULL);` in example_crashpad.c
-- update on including source bundles
-- create_release, associate_commits
-    ```
-    <ORG> slug and <PROJECT> in Makefile for 'make commands to use
-    # SENTRY_ORG=testorg-az ?
-    # SENTRY_PROJECT=will-frontend-react ?
-    # ^^ would need to work when you `cd sentry-native/gen_macosx`
-    ```
-- TODO - how to get the release '54fd' how/where was it set? this affects the $VERSION variable in Makefile
-- TODO - filename in commit has to match the filename+path in the stack frame
 
 ### Must Read
 
