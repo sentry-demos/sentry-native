@@ -1,7 +1,8 @@
 SENTRY_ORG=testorg-az
 SENTRY_PROJECT=frontend-react
 PREFIX=static/js
-VERSION=`sentry-cli releases propose-version`
+# VERSION=`sentry-cli releases propose-version`
+VERSION=5fd7a6cd
 
 
 all: bin/example
