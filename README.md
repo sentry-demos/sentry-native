@@ -1,5 +1,5 @@
 # Overview
-1. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`  
+1. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`
 
 ### Must Read
 
@@ -16,8 +16,8 @@ This project is not for developing or testing locally, so if the standalone dist
 `sentry-native` in the news https://blog.sentry.io/2019/09/26/fixing-native-apps-with-sentry
 
 ## Mac
-1. `make bin/example` 
-2. `make upload_debug_files`
+1. `make bin/example`
+2. `make setup_release`
 3. `make run`
 
 
@@ -32,7 +32,7 @@ sentry-cli upload-dif --org testorg-az --project sentry-native bin/
 TODO `set` DSN
 
 1. download Premake5.exe
-2. cd premake5 and 
+2. cd premake5 and
 premake5.exe vs2017 <---creates a solution, a wrapper around projects that ref each other
 3. open the .sln in VS
 4. click 'ok' for accepting the upgrade by VS.
@@ -65,8 +65,8 @@ Why memset causes native crashes, http://www.cplusplus.com/reference/cstring/mem
 ## TODO Remove
 ```
 1. `make` builds the source files, application, uploads symbols
-2. `make run` runs the bin/example  
-or...  
+2. `make run` runs the bin/example
+or...
 ```
 
 ```

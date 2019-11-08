@@ -36,11 +36,11 @@ create_release:
 
 # TODO what to do here?
 associate_commits:
-	sentry-cli releases -o $(SENTRY_ORG) -p $(SENTRY_PROJECT) set-commits --commit $(VERSION)
+	sentry-cli releases -o $(SENTRY_ORG) -p $(SENTRY_PROJECT) set-commits $(VERSION) --auto
 .PHONY: associate_commits
 
 upload_debug_files:
-	sentry-cli upload-dif --org testorg-az --project sentry-native bin/
+	sentry-cli upload-dif --org testorg-az --project sentry-native --wait --include-sources bin/
 .PHONY: upload_debug_files
 
 run:
