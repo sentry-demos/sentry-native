@@ -10,12 +10,14 @@ const char *handler_path = "bin/crashpad_handler.exe";
 const char *handler_path = "bin/crashpad_handler";
 #endif
 
-void initialize_memory(char *mem) {
+void initialize_memory(char *mem)
+{
     sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Initializing memory"));
     memset(mem, 1, 100);
 }
 
-void startup(void) {
+void startup(void)
+{
     sentry_set_transaction("startup");
     sentry_set_level(SENTRY_LEVEL_ERROR);
 
@@ -32,7 +34,8 @@ void startup(void) {
     sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Finished setup"));
 }
 
-void send_event(void) {
+void send_event(void)
+{
     sentry_set_transaction("startup");
 
     sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
@@ -59,18 +62,16 @@ void send_event(void) {
     sentry_capture_event(event);
 }
 
-int main(void) {
+int main(void)
+{
     sentry_options_t *options = sentry_options_new();
 
     sentry_options_set_handler_path(options, handler_path);
     sentry_options_set_environment(options, "Production");
-    
-    // TODO how to get $VERSION variable from Makefile referenced here? Is that the right approach?
-    sentry_options_set_release(options, "5fd7a6cd");
-    // Ideas...
-    // https://en.cppreference.com/w/cpp/utility/program/getenv and http://www.cplusplus.com/reference/cstdlib/getenv/
-    // https://stackoverflow.com/questions/24963654/accessing-makefile-variables-in-code
-    // https://stackoverflow.com/questions/30291476/how-to-use-a-variable-from-a-makefile-in-ifdef-in-c-file
+
+#ifdef SENTRY_RELEASE
+    sentry_options_set_release(options, SENTRY_RELEASE);
+#endif
 
     sentry_options_set_database_path(options, "sentry-db");
     sentry_options_set_debug(options, 1);

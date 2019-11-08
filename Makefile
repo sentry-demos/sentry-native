@@ -1,16 +1,13 @@
 SENTRY_ORG=testorg-az
 SENTRY_PROJECT=frontend-react
 PREFIX=static/js
-# TODO ideally it should be:
-# VERSION=`sentry-cli releases propose-version`
-VERSION=5fd7a6cd
-
+VERSION ?= $(shell sentry-cli releases propose-version)
 
 all: bin/example
 .PHONY: all
 
 bin/example: prereqs src/example.c
-	$(CC) -o $@ -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
+	$(CC) -o $@ -DSENRTY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
 
 prereqs: bin/libsentry_crashpad.dylib bin/crashpad_handler
 .PHONY: prereqs
@@ -30,21 +27,21 @@ sentry-makefile: sentry-native/premake/Makefile
 sentry-native/premake/Makefile:
 	$(MAKE) -C sentry-native fetch configure
 
-
-
 setup_release: create_release associate_commits upload_debug_files
+.PHONY: setup_release
 
 create_release:
 	sentry-cli releases -o $(SENTRY_ORG) new -p $(SENTRY_PROJECT) $(VERSION)
+.PHONY: create_release
 
 # TODO what to do here?
 associate_commits:
-	sentry-cli releases -o $(SENTRY_ORG) -p $(SENTRY_PROJECT) set-commits --auto $(VERSION)
+	sentry-cli releases -o $(SENTRY_ORG) -p $(SENTRY_PROJECT) set-commits --commit $(VERSION)
+.PHONY: associate_commits
 
 upload_debug_files:
 	sentry-cli upload-dif --org testorg-az --project sentry-native bin/
-
-
+.PHONY: upload_debug_files
 
 run:
 	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example
