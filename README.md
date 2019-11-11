@@ -80,7 +80,9 @@ or...
 where to put the -j4
 ```
 
-
+Minidumps Endpoint for a `sentry-native` project:
 ```
-.PHONY for upload_debug_files ?
+curl -X POST \
+  'https://sentry.io/api/1720457/minidump/?sentry_key=b5ceabee4e4a4cd6b21afe3bd2cbbed4' \
+  -F upload_file_minidump=@b066e1b0-68ef-4d7a-8f59-e59ad0e63d8d.dmp
 ```
