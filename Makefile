@@ -1,5 +1,5 @@
 SENTRY_ORG=testorg-az
-SENTRY_PROJECT=frontend-react
+SENTRY_PROJECT=sentry-native
 PREFIX=static/js
 VERSION ?= $(shell sentry-cli releases propose-version)
 
@@ -7,7 +7,7 @@ all: bin/example
 .PHONY: all
 
 bin/example: prereqs src/example.c
-	$(CC) -g -o $@ -DSENRTY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
+	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
 
 prereqs: bin/libsentry_crashpad.dylib bin/crashpad_handler
 .PHONY: prereqs
