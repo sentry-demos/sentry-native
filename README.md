@@ -23,6 +23,10 @@ This project is not for developing or testing locally, so if the standalone dist
 2. `make setup_release`
 3. `make run`
 
+TODO:
+`make clean` for re-running the demo
+- anything from inside the submodule (e.g. bin) that should be 'cleaned/removed' as well?
+- `rm *` from parent ./bin (except for the .gitignore)
 
 ```
 sentry-cli upload-dif --org testorg-az --project sentry-native bin/{sentry_crashpad.dylib,sentry_crashpad.dSYM,example,example.dSYM}
