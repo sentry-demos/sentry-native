@@ -85,4 +85,6 @@ int main(void)
 
     // normally happens before sentry_shutdown
     startup();
+
+    return 0;
 }

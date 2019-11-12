@@ -24,6 +24,10 @@ This project is not for developing or testing locally, so if the standalone dist
 3. `make run` (this runs make clean_db as well)
 4. `make clean` if you want to re-run `make bin/example` which re-creates debug symbols and executables
 
+DID:
+- rm ./bin/example.dSYM
+- rm ./bin/example
+
 TODO:
 `make clean` for re-running the demo
 - Don't Do - anything from inside the submodule (e.g. bin) that should be 'cleaned/removed' as well?
