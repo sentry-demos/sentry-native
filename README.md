@@ -21,7 +21,8 @@ This project is not for developing or testing locally, so if the standalone dist
 ## Mac
 1. `make bin/example`
 2. `make setup_release`
-3. `make run`
+3. `make run` (this runs make clean_db as well)
+4. `make clean` if you want to re-run `make bin/example` which re-creates debug symbols and executables
 
 TODO:
 `make clean` for re-running the demo

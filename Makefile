@@ -44,6 +44,13 @@ upload_debug_files:
 	sentry-cli upload-dif --org testorg-az --project sentry-native --wait --include-sources bin/
 .PHONY: upload_debug_files
 
-run:
-	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example
+run: clean_db run_app
 .PHONY: run
+
+clean_db:
+	rm -rf ./sentry-db/*
+.PHONY: clean_db
+
+run_app:
+	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example
+.PHONY: run_app
