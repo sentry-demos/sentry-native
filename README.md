@@ -25,7 +25,7 @@ This project is not for developing or testing locally, so if the standalone dist
 
 TODO:
 `make clean` for re-running the demo
-- anything from inside the submodule (e.g. bin) that should be 'cleaned/removed' as well?
+- Don't Do - anything from inside the submodule (e.g. bin) that should be 'cleaned/removed' as well?
 - `rm *` from parent ./bin (except for the .gitignore)
 
 ```
@@ -71,6 +71,7 @@ Why memset causes native crashes, http://www.cplusplus.com/reference/cstring/mem
 
 ## TODO Remove
 ```
+#  add COMMENTS LIKE
 1. `make` builds the source files, application, uploads symbols
 2. `make run` runs the bin/example
 or...
@@ -86,3 +87,7 @@ curl -X POST \
   'https://sentry.io/api/1720457/minidump/?sentry_key=b5ceabee4e4a4cd6b21afe3bd2cbbed4' \
   -F upload_file_minidump=@b066e1b0-68ef-4d7a-8f59-e59ad0e63d8d.dmp
 ```
+
+
+
+.PHONY's all on 1 line.

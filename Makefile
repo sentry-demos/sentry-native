@@ -36,7 +36,6 @@ create_release:
 	sentry-cli releases -o $(SENTRY_ORG) new -p $(SENTRY_PROJECT) $(VERSION)
 .PHONY: create_release
 
-# TODO what to do here?
 associate_commits:
 	sentry-cli releases -o $(SENTRY_ORG) -p $(SENTRY_PROJECT) set-commits $(VERSION) --auto
 .PHONY: associate_commits
