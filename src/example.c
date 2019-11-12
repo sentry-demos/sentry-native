@@ -12,7 +12,7 @@ const char *handler_path = "bin/crashpad_handler";
 
 void initialize_memory(char *mem)
 {
-    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Initializing memory"));
+    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Initializing memory"));
     memset(mem, 1, 100);
 }
 
@@ -21,7 +21,7 @@ void startup(void)
     sentry_set_transaction("startup");
     sentry_set_level(SENTRY_LEVEL_ERROR);
 
-    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Setting user to John Doe"));
+    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Setting user to John Doe"));
 
     sentry_value_t user = sentry_value_new_object();
     sentry_value_set_by_key(user, "id", sentry_value_new_int32(42));
@@ -31,14 +31,14 @@ void startup(void)
 
     initialize_memory((char *)0x0);
 
-    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Finished setup"));
+    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Finished setup"));
 }
 
 void send_event(void)
 {
     sentry_set_transaction("startup");
 
-    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
+    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
 
     sentry_value_t gpu = sentry_value_new_object();
     sentry_value_set_by_key(gpu, "name", sentry_value_new_string("AMD Radeon Pro 560"));
