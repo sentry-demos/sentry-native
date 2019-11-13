@@ -34,7 +34,7 @@ premake5.exe vs2017 <---creates a solution, a wrapper around projects that ref e
 8. the builds go into /sentry-native/premake/bin
 9. sentry-native/premake, spwan a cmd, bin\Debug\example_crashpad.exe
 
-### Sentry Event Examples
+## Event Examples
 [Symbolicated stacktrace of a native crash](screenshots/native-crash-stacktrace.png)
 
 [Sentry capture message](screenshots/message-capture.png)
