@@ -22,17 +22,7 @@ This project makes use of **sentry-native** in its packaged release form. It is 
 `make clean` only needs to be run if you're trying to re-run `make bin/example`
 
 ## Windows
-Do everything in Visual Studio Code and set the DSN first.
-1. download Premake5.exe
-2. cd premake5 and
-premake5.exe vs2017 <---creates a solution, a wrapper around projects that ref each other
-3. open the .sln in VS
-4. click 'ok' for accepting the upgrade by VS.
-5. rt-click 'example-crashpad' project and click Build
-6. can 'Set as Default Project' for when you click Run Button at the top
-7. rt-click 'crashpad-handler' project and click Build
-8. the builds go into /sentry-native/premake/bin
-9. sentry-native/premake, spwan a cmd, bin\Debug\example_crashpad.exe
+[*These instructions are still under development*](./windows.txt)
 
 ## Event Examples
 [Symbolicated stacktrace of a native crash](screenshots/native-crash-stacktrace.png)
@@ -52,3 +42,10 @@ sentry-native in the news https://blog.sentry.io/2019/09/26/fixing-native-apps-w
 
 ## Gif
 ![gif](screenshots/sentry-native-2-events-150.gif)
+
+## Minidumps
+If you want to perform a `curl` request directly against our Sentry API and pass the .dmp in the payload...
+
+https://docs.sentry.io/platforms/native/minidump/#minidump-additional
+
+
