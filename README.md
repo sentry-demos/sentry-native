@@ -49,3 +49,6 @@ You need to always run `bin/example` before `setup_release`
 The [memset](http://www.cplusplus.com/reference/cstring/memset/) invocation in `src/example.c` is what causes a native crash
 
 sentry-native in the news https://blog.sentry.io/2019/09/26/fixing-native-apps-with-sentry
+
+## Gif
+![gif](screenshots/sentry-native-2-events-150.gif)
