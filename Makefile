@@ -41,7 +41,7 @@ associate_commits:
 .PHONY: associate_commits
 
 upload_debug_files:
-	sentry-cli upload-dif --org testorg-az --project sentry-native --wait --include-sources bin/
+	sentry-cli upload-dif --org testorg-az --project $(SENTRY_PROJECT) --wait --include-sources bin/
 .PHONY: upload_debug_files
 
 run: clean_db run_app
