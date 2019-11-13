@@ -10,16 +10,18 @@ const char *handler_path = "bin/crashpad_handler.exe";
 const char *handler_path = "bin/crashpad_handler";
 #endif
 
-void initialize_memory(char *mem) {
-    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Initializing memory"));
+void initialize_memory(char *mem)
+{
+    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Initializing memory"));
     memset(mem, 1, 100);
 }
 
-void startup(void) {
+void startup(void)
+{
     sentry_set_transaction("startup");
     sentry_set_level(SENTRY_LEVEL_ERROR);
 
-    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Setting user to John Doe"));
+    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Setting user to John Doe"));
 
     sentry_value_t user = sentry_value_new_object();
     sentry_value_set_by_key(user, "id", sentry_value_new_int32(42));
@@ -29,13 +31,14 @@ void startup(void) {
 
     initialize_memory((char *)0x0);
 
-    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Finished setup"));
+    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Finished setup"));
 }
 
-void send_event(void) {
+void send_event(void)
+{
     sentry_set_transaction("startup");
 
-    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
+    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
 
     sentry_value_t gpu = sentry_value_new_object();
     sentry_value_set_by_key(gpu, "name", sentry_value_new_string("AMD Radeon Pro 560"));
@@ -59,12 +62,17 @@ void send_event(void) {
     sentry_capture_event(event);
 }
 
-int main(void) {
+int main(void)
+{
     sentry_options_t *options = sentry_options_new();
 
     sentry_options_set_handler_path(options, handler_path);
     sentry_options_set_environment(options, "Production");
-    sentry_options_set_release(options, "5fd7a6cd");
+
+#ifdef SENTRY_RELEASE
+    sentry_options_set_release(options, SENTRY_RELEASE);
+#endif
+
     sentry_options_set_database_path(options, "sentry-db");
     sentry_options_set_debug(options, 1);
     // sentry_options_add_attachment(options, "application.log",
@@ -77,4 +85,6 @@ int main(void) {
 
     // normally happens before sentry_shutdown
     startup();
+
+    return 0;
 }
