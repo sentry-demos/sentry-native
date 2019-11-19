@@ -44,3 +44,8 @@ clean_db:
 
 run_app:
 	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example
+
+curl_minidump:
+	cd ./sentry-db/completed; curl -X POST \
+			'https://sentry.io/api/1720457/minidump/?sentry_key=b5ceabee4e4a4cd6b21afe3bd2cbbed4' \
+			-F upload_file_minidump=@`ls`
