@@ -4,7 +4,7 @@ PREFIX=static/js
 VERSION ?= $(shell sentry-cli releases propose-version)
 
 all: bin/example
-.PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run clean_db run_app
+.PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run clean_db run_app clean
 
 bin/example: prereqs src/example.c
 	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
@@ -39,6 +39,12 @@ upload_debug_files:
 
 run: clean_db run_app
 
+clean:
+	rm -rf ./bin/exampl*
+	rm -rf ./bin/crash*
+	rm -rf ./bin/libsent*
+	rm -rf ./sentry-native/premake/bin/Release
+	
 clean_db:
 	rm -rf ./sentry-db/*
 
