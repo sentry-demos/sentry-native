@@ -17,9 +17,30 @@ This project makes use of **sentry-native** in its packaged release form. It is 
 
 #### What's Happening
 `make bin/example` creates debug symbols and executables  
-`make setup_release` creates a Sentry Release and associates git commits  
+`make setup_release` creates a Sentry Release and associates git commits, and uploads debug symbols 
 `make run` executes `src/example.c` which sends 2 Events to Sentry. 1 is for a native crash and the other is a Sentry Capture Message. First it removes any outstanding .dmp files from ./sentry-db  
 `make clean` only needs to be run if you're trying to re-run `make bin/example`
+
+#### If your events are not symbolicated
+1. something
+```
+cd ./bin
+➜  bin git:(master) ✗ rm -rf crash*
+➜  bin git:(master) ✗ rm -rf exampl*
+➜  bin git:(master) ✗ rm -rf libsent*
+cd ../
+
+and...
+
+rm ./sentry-native/premake/bin
+
+```
+
+
+re-run from `make bin/example` again
+
+2. something
+3. something
 
 ## Windows
 Do everything in Visual Studio Code and set the DSN first.
