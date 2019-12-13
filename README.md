@@ -1,7 +1,8 @@
 ## Setup
-1. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`
-2. install `sentry-cli 1.49.0z` from https://github.com/getsentry/sentry-cli/releases/ and https://docs.sentry.io/cli/installation/. You can run `yarn global add @sentry/cli`
-3. [mac](#mac)
+1. `git clone --recurse-submodules git@github.com:thinkocapo/sentry-native.git`
+2. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`
+3. install `sentry-cli 1.49.0z` from https://github.com/getsentry/sentry-cli/releases/ and https://docs.sentry.io/cli/installation/. You can run `yarn global add @sentry/cli`
+4. [mac](#mac)
 
 ## Dev Tips
 
