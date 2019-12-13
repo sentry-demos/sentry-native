@@ -13,6 +13,7 @@ This project makes use of **sentry-native** in its packaged release form. It is 
 ## Mac
 1. `make bin/example`
 2. `make setup_release`
+3. `make upload_debug_files`
 3. `make run`
 4. `make clean`
 
