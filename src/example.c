@@ -36,7 +36,7 @@ void startup(void)
 
 void send_event(void)
 {
-    sentry_set_transaction("startup");
+    sentry_set_transaction("send_event");
 
     // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
 
@@ -81,10 +81,10 @@ int main(void)
     sentry_init(options);
     send_event();
 
-    sentry_shutdown();
-
     // normally happens before sentry_shutdown
     startup();
+
+    sentry_shutdown();
 
     return 0;
 }
