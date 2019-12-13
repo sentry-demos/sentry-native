@@ -45,17 +45,7 @@ re-run from `make bin/example` again
 3. something
 
 ## Windows
-Do everything in Visual Studio Code and set the DSN first.
-1. download Premake5.exe
-2. cd premake5 and
-premake5.exe vs2017 <---creates a solution, a wrapper around projects that ref each other
-3. open the .sln in VS
-4. click 'ok' for accepting the upgrade by VS.
-5. rt-click 'example-crashpad' project and click Build
-6. can 'Set as Default Project' for when you click Run Button at the top
-7. rt-click 'crashpad-handler' project and click Build
-8. the builds go into /sentry-native/premake/bin
-9. sentry-native/premake, spwan a cmd, bin\Debug\example_crashpad.exe
+[windows instructions](windows.txt)
 
 ## Event Examples
 [Symbolicated stacktrace of a native crash](screenshots/native-crash-stacktrace.png)
