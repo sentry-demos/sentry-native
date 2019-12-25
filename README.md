@@ -1,8 +1,8 @@
 ## Setup
+This is for running on Mac. For Windows see [windows instructions](windows.txt) which are still under development.
 1. `git clone --recurse-submodules git@github.com:thinkocapo/sentry-native.git`
 2. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`
 3. install `sentry-cli 1.49.0z` from https://github.com/getsentry/sentry-cli/releases/ and https://docs.sentry.io/cli/installation/. You can run `yarn global add @sentry/cli`
-4. [mac](#mac)
 
 ## Dev Tips
 
@@ -14,43 +14,23 @@ This project makes use of **sentry-native** in its packaged release form. It is 
 1. `make bin/example`
 2. `make setup_release`
 3. `make upload_debug_files`
-3. `make run`
-4. `make clean`
+4. `make run`
+5. `make clean`
 
 #### What's Happening
 `make bin/example` creates debug symbols and executables  
-`make setup_release` creates a Sentry Release and associates git commits, and uploads debug symbols 
-`make run` executes `src/example.c` which sends 2 Events to Sentry. 1 is for a native crash and the other is a Sentry Capture Message. First it removes any outstanding .dmp files from ./sentry-db  
-`make clean` only needs to be run if you're trying to re-run `make bin/example`
 
-#### If your events are not symbolicated
-1. something
-```
-cd ./bin
-➜  bin git:(master) ✗ rm -rf crash*
-➜  bin git:(master) ✗ rm -rf exampl*
-➜  bin git:(master) ✗ rm -rf libsent*
-cd ../
+`make setup_release` creates a Sentry Release and associates git commits
 
-and...
+`make upload_debug_files` uploads your symbols to Sentry.io where you can find them in Project Settings > Debug Files which is at https://sentry.io/settings/${ORG}/projects/${PROJECT}/debug-symbols/
 
-rm ./sentry-native/premake/bin
+`make run_crash` causes a native crash in `src/example.c`. It sends one event to Sentry
 
-```
+`make run_message` causes a Sentry Message to get sent as an event to Sentry.
 
+Both run commands first remove any outstanding .dmp files from ./sentry-db?
 
-re-run from `make bin/example` again
-
-2. something
-3. something
-
-## Windows
-[windows instructions](windows.txt)
-
-## Event Examples
-[Symbolicated stacktrace of a native crash](screenshots/native-crash-stacktrace.png)
-
-[Sentry capture message](screenshots/message-capture.png)
+`make clean` is for re-generating debug symbols and executables
 
 ## Notes
 Use https://github.com/getsentry/sentry-native when ready to implement this in your real code. this `sentry-demos/sentry-native` is an example implementation (demo) of `getsentry/sentry-native`
@@ -62,6 +42,10 @@ You need to always run `bin/example` before `setup_release`
 The [memset](http://www.cplusplus.com/reference/cstring/memset/) invocation in `src/example.c` is what causes a native crash
 
 sentry-native in the news https://blog.sentry.io/2019/09/26/fixing-native-apps-with-sentry
+
+## Troubleshooting
+#### If your events are not symbolicated
+`make clean` and re-run commands from step 1
 
 ## Gif
 ![gif](screenshots/sentry-native-2-events-150.gif)
