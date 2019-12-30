@@ -84,6 +84,7 @@ int main(void)
     // normally happens before sentry_shutdown
     startup();
 
+    // used to happen before startup(), for getting 2 events in one run
     sentry_shutdown();
 
     return 0;
