@@ -62,6 +62,7 @@ void send_event(void)
     sentry_capture_event(event);
 }
 
+// `make run message` or `make run crash`
 int main(int argc, char *argv[])
 {
     sentry_options_t *options = sentry_options_new();
@@ -80,26 +81,21 @@ int main(int argc, char *argv[])
 
     sentry_init(options);
 
-    // `make run message`
     if (argc != 2) {
         printf("Usage: %s [--crash|--message]\n", argv[0]);
-    } else if (strcmp(argv[1], "--crash", 7) == 0) {
+    } else if (strcmp(argv[1], "--crash") == 0) {
         startup();
-        // ...
         printf("SentryEventType: %s\n", argv[1]);
-        // for Sentry Message
+        // Sentry Message
         send_event();
-        sentry_shutdown();
-    }
-    // `make run_crash`
-    else if( strncmp(argv[1], "--message", 4) ) {
+    } else if( strcmp(argv[1], "--message") == 0 ) {
         printf("SentryEventType: %s\n", argv[1]);
-        // causes Native Crash
+        // Native Crash
         startup();
-    }
-    else {
+    } else {
         printf("WrongArguments: run \'make run_crash\' or \'make run_message\' \n");
     }
 
+    sentry_shutdown();
     return 0;
 }
