@@ -37,8 +37,11 @@ associate_commits:
 upload_debug_files:
 	sentry-cli upload-dif --org testorg-az --project $(SENTRY_PROJECT) --wait --include-sources bin/
 
-run_crash: clean_db crash
-run_message: clean_db message
+run_crash: clean_db
+	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example --crash
+
+run_message: clean_db
+	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example --message
 
 clean:
 	rm -rf ./bin/exampl*
@@ -48,9 +51,4 @@ clean:
 	
 clean_db:
 	rm -rf ./sentry-db/*
-
-crash:
-	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example --crash
-
-message:
-	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example --message
+	
