@@ -81,7 +81,11 @@ int main(int argc, char *argv[])
     sentry_init(options);
 
     // `make run message`
-    if( strncmp(argv[1], "--crash", 4) ) {
+    if (argc != 2) {
+        printf("Usage: %s [--crash|--message]\n", argv[0]);
+    } else if (strcmp(argv[1], "--crash", 7) == 0) {
+        startup();
+        // ...
         printf("SentryEventType: %s\n", argv[1]);
         // for Sentry Message
         send_event();
