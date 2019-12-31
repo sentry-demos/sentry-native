@@ -79,23 +79,22 @@ int main(int argc, char *argv[])
     //                               "application.log");
 
     sentry_init(options);
-    // printf("argc is: %s\n", argc);
 
     // `make run message`
-    if( argc == 2 ) {
-        printf("argc == 2 The argument supplied is: %s\n", argv[1]);
+    if( strncmp(argv[1], "--crash", 4) ) {
+        printf("SentryEventType: %s\n", argv[1]);
         // for Sentry Message
         send_event();
-        // for Sentry Message
-        // used to happen before startup(), for getting 2 events in one run
         sentry_shutdown();
     }
-    // `make run` [crash]
-    else {
-        printf("else No argument supplied: %s\n", argv[1]);
+    // `make run_crash`
+    else if( strncmp(argv[1], "--message", 4) ) {
+        printf("SentryEventType: %s\n", argv[1]);
         // causes Native Crash
-        // normally happens before sentry_shutdown
         startup();
+    }
+    else {
+        printf("WrongArguments: run \'make run_crash\' or \'make run_message\' \n");
     }
 
     return 0;

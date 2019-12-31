@@ -4,7 +4,7 @@ PREFIX=static/js
 VERSION ?= $(shell sentry-cli releases propose-version)
 
 all: bin/example
-.PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run clean_db run_app clean
+.PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run_crash run_message clean clean_db run_app
 
 bin/example: prereqs src/example.c
 	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
@@ -37,7 +37,8 @@ associate_commits:
 upload_debug_files:
 	sentry-cli upload-dif --org testorg-az --project $(SENTRY_PROJECT) --wait --include-sources bin/
 
-run: clean_db run_app
+run_crash: clean_db crash
+run_message: clean_db message
 
 clean:
 	rm -rf ./bin/exampl*
@@ -48,5 +49,8 @@ clean:
 clean_db:
 	rm -rf ./sentry-db/*
 
-run_app:
-	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example
+crash:
+	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example --crash
+
+message:
+	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example --message
