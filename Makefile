@@ -1,10 +1,10 @@
 SENTRY_ORG=testorg-az
-SENTRY_PROJECT=sentry-native
+SENTRY_PROJECT=will-sentry-native
 PREFIX=static/js
 VERSION ?= $(shell sentry-cli releases propose-version)
 
 all: bin/example
-.PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run_crash run_message clean clean_db run_app
+.PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run_crash run_message clean clean_db
 
 bin/example: prereqs src/example.c
 	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
@@ -27,7 +27,7 @@ sentry-native/premake/Makefile:
 	$(MAKE) -C sentry-native fetch configure
 
 # SENTRY
-setup_release: create_release associate_commits upload_debug_files
+setup_release: create_release associate_commits
 create_release:
 	sentry-cli releases -o $(SENTRY_ORG) new -p $(SENTRY_PROJECT) $(VERSION)
 
@@ -51,4 +51,3 @@ clean:
 	
 clean_db:
 	rm -rf ./sentry-db/*
-	

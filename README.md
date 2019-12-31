@@ -15,8 +15,9 @@ This is for running on Mac. For Windows see windows.txt which is still under dev
 1. `make bin/example`
 2. `make setup_release`
 3. `make upload_debug_files`
-4. `make run`
-5. `make clean`
+4. `make run_crash`
+5. `make run_message`
+6. `make clean`
 
 ## Technical Notes
 ### What's Happening
@@ -30,9 +31,8 @@ This is for running on Mac. For Windows see windows.txt which is still under dev
 
 `make run_message` causes a Sentry Message to get sent as an event to Sentry.
 
-Both run commands first remove any outstanding .dmp files from ./sentry-db?
-
 `make clean` is for re-generating debug symbols and executables
+
 Use https://github.com/getsentry/sentry-native when ready to implement this in your real code. this `sentry-demos/sentry-native` is an example implementation (demo) of `getsentry/sentry-native`
 
 ### Dev Tips
