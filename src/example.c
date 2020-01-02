@@ -81,16 +81,15 @@ int main(int argc, char *argv[])
 
     sentry_init(options);
 
+    // Native Crash else do a Sentry Message
     if (argc != 2) {
         printf("Usage: %s [--crash|--message]\n", argv[0]);
     } else if (strcmp(argv[1], "--crash") == 0) {
         startup();
         printf("SentryEventType: %s\n", argv[1]);
-        // Sentry Message
         send_event();
     } else if( strcmp(argv[1], "--message") == 0 ) {
         printf("SentryEventType: %s\n", argv[1]);
-        // Native Crash
         startup();
     } else {
         printf("WrongArguments: run \'make run_crash\' or \'make run_message\' \n");
