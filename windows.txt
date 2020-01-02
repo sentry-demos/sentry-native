@@ -1,13 +1,7 @@
+These instructions are still under development and have not been tested by /sentry-demos
 
-VM with WIndows, mounting into Mac
+Use Visual Studio Code and set the DSN first.
 
-WINDOWS
-no makefile like on mac
-use VIsual STudio. VS solution
-
-
-`make configure fetch` not on windows so run:
-Windows steps
 1. download Premake5.exe
 2. cd premake5 and 
 premake5.exe vs2017 <---creates a solution, a wrapper around projects that ref each other
@@ -19,7 +13,4 @@ premake5.exe vs2017 <---creates a solution, a wrapper around projects that ref e
 8. the builds go into /sentry-native/premake/bin
 9. sentry-native/premake, spwan a cmd, bin\Debug\example_crashpad.exe
 
-TODO set DSN
--------------------------------
-we distribute 2017
-.sln opens in VisualStudio
+- we distribute 2017

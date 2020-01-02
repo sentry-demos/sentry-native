@@ -1,74 +1,45 @@
+## Overview
+The goal of this is to produce a native crash that gets captured / sent as event to Sentry.
+
+This project is a demo implementation of **sentry-native**, the Sentry SDK for Native Crash Reporting which you can download here https://github.com/getsentry/sentry-native as a distribution zip for use in Production. This project uses it in its pakcaged release form - it is referenced as a submodule.
+
+**Official Sentry Documentation**  
+Use https://github.com/getsentry/sentry-native when ready to implement this in your real code.
+
 ## Setup
+This is for running on Mac. See windows.txt for Windows.
 1. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`
-2. install `sentry-cli 1.49.0z` from https://github.com/getsentry/sentry-cli/releases/ and https://docs.sentry.io/cli/installation/. You can run `yarn global add @sentry/cli`
-3. [mac](#mac)
-
-## Dev Tips
-
-This project makes use of **sentry-native**, the Sentry SDK for Native Crash Reporting https://github.com/getsentry/sentry-native
-
-This project makes use of **sentry-native** in its packaged release form. It is referenced as a submodule in this project but you will download it as a distribution .zip from getsentry/sentry-native when you're ready to use it
+2. `yarn global add @sentry/cli` to install *sentry-cli 1.49.0z*. You can also get it from https://github.com/getsentry/sentry-cli/releases/ or https://docs.sentry.io/cli/installation/
 
 ## Mac
 1. `make bin/example`
 2. `make setup_release`
 3. `make upload_debug_files`
-3. `make run`
-4. `make clean`
+4. `make run_crash` or `make run_message`
 
-#### What's Happening
+`make clean` if you need to re-run `make bin/example` and upload new debug files.
+
+## Technical Notes
+### What's Happening
 `make bin/example` creates debug symbols and executables  
-`make setup_release` creates a Sentry Release and associates git commits, and uploads debug symbols 
-`make run` executes `src/example.c` which sends 2 Events to Sentry. 1 is for a native crash and the other is a Sentry Capture Message. First it removes any outstanding .dmp files from ./sentry-db  
-`make clean` only needs to be run if you're trying to re-run `make bin/example`
 
-#### If your events are not symbolicated
-1. something
-```
-cd ./bin
-➜  bin git:(master) ✗ rm -rf crash*
-➜  bin git:(master) ✗ rm -rf exampl*
-➜  bin git:(master) ✗ rm -rf libsent*
-cd ../
+`make setup_release` creates a Sentry Release and associates git commits
 
-and...
+`make upload_debug_files` uploads your symbols to https://sentry.io/settings/${YOUR_ORG}/projects/${PROJECT}/debug-symbols/ which is Project Settings > Debug Files
 
-rm ./sentry-native/premake/bin
+`make run_crash` causes a native crash in *src/example.c*. It sends one event to Sentry
 
-```
+`make run_message` causes a Sentry Message to get sent as an event to Sentry.
+
+`make clean` is for re-generating debug symbols and executables
 
 
-re-run from `make bin/example` again
-
-2. something
-3. something
-
-## Windows
-Do everything in Visual Studio Code and set the DSN first.
-1. download Premake5.exe
-2. cd premake5 and
-premake5.exe vs2017 <---creates a solution, a wrapper around projects that ref each other
-3. open the .sln in VS
-4. click 'ok' for accepting the upgrade by VS.
-5. rt-click 'example-crashpad' project and click Build
-6. can 'Set as Default Project' for when you click Run Button at the top
-7. rt-click 'crashpad-handler' project and click Build
-8. the builds go into /sentry-native/premake/bin
-9. sentry-native/premake, spwan a cmd, bin\Debug\example_crashpad.exe
-
-## Event Examples
-[Symbolicated stacktrace of a native crash](screenshots/native-crash-stacktrace.png)
-
-[Sentry capture message](screenshots/message-capture.png)
-
-## Notes
-Use https://github.com/getsentry/sentry-native when ready to implement this in your real code. this `sentry-demos/sentry-native` is an example implementation (demo) of `getsentry/sentry-native`
-
-This project is not for developing or testing locally, so if the standalone distribution package doesn't fit your needs, then go to https://github.com/getsentry/sentry-native#development
+## Troubleshooting
+If your events are not symbolicated then run `make clean` and re-run commands from step 1
 
 You need to always run `bin/example` before `setup_release`
 
-The [memset](http://www.cplusplus.com/reference/cstring/memset/) invocation in `src/example.c` is what causes a native crash
+If the standalone distribution package doesn't fit your needs, then go to https://github.com/getsentry/sentry-native#development
 
 sentry-native in the news https://blog.sentry.io/2019/09/26/fixing-native-apps-with-sentry
 
