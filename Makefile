@@ -1,5 +1,5 @@
 SENTRY_ORG=testorg-az
-SENTRY_PROJECT=will-sentry-native
+SENTRY_PROJECT=sentry-native
 PREFIX=static/js
 VERSION ?= $(shell sentry-cli releases propose-version)
 
