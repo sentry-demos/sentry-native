@@ -3,7 +3,7 @@ The goal of this is to produce a native crash that gets captured / sent as event
 
 This project is a demo implementation of **sentry-native**, the Sentry SDK for Native Crash Reporting which you can download here https://github.com/getsentry/sentry-native as a distribution zip for use in Production. This project uses it in its pakcaged release form - it is referenced as a submodule.
 
-**Official Sentry Documentation**  
+**Official Sentry Documentation**
 Use https://github.com/getsentry/sentry-native when ready to implement this in your real code.
 
 ## Setup
@@ -19,9 +19,11 @@ This is for running on Mac. See windows.txt for Windows.
 
 `make clean` if you need to re-run `make bin/example` and upload new debug files.
 
+You can also run all of them at once sequentially: `make clean bin/example setup_release upload_debug_files run_crash`
+
 ## Technical Notes
 ### What's Happening
-`make bin/example` creates debug symbols and executables  
+`make bin/example` creates debug symbols and executables
 
 `make setup_release` creates a Sentry Release and associates git commits
 
