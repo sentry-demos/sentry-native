@@ -7,15 +7,26 @@ This project is a demo implementation of **sentry-native**, the Sentry SDK for N
 Use https://github.com/getsentry/sentry-native when ready to implement this in your real code.
 
 ## Setup
-This is for running on Mac. See windows.txt for Windows.
-1. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`
-2. `yarn global add @sentry/cli` to install *sentry-cli 1.49.0z*. You can also get it from https://github.com/getsentry/sentry-cli/releases/ or https://docs.sentry.io/cli/installation/
+### Versions
+*sentry-native v0.1.4*  
+*sentry-cli 1.49.0z*  
+*macOS Mojave 10.14.4*  
+*See windows.txt for Windows*
 
-## Mac
-1. `make bin/example`
-2. `make setup_release`
-3. `make upload_debug_files`
-4. `make run_crash` or `make run_message`
+
+#### sentry-cli
+1. `yarn global add @sentry/cli`. You can also get it from https://github.com/getsentry/sentry-cli/releases/ or https://docs.sentry.io/cli/installation/
+
+
+#### Mac
+1. `git clone --recurse-submodules git@github.com:sentry-demos/sentry-native.git`
+2. `make bin/example`
+3. `make setup_release`
+4. `make upload_debug_files`
+5. `make run_crash` or `make run_message`
+
+You can also run all of them at once sequentially:  
+`make clean bin/example setup_release upload_debug_files run_crash`
 
 `make clean` if you need to re-run `make bin/example` and upload new debug files.
 
@@ -25,7 +36,7 @@ This is for running on Mac. See windows.txt for Windows.
 
 `make setup_release` creates a Sentry Release and associates git commits
 
-`make upload_debug_files` uploads your symbols to https://sentry.io/settings/${YOUR_ORG}/projects/${PROJECT}/debug-symbols/ which is Project Settings > Debug Files
+`make upload_debug_files` uploads your symbols to Project Settings > Debug Files https://sentry.io/settings/${YOUR_ORG}/projects/${PROJECT}/debug-symbols/  
 
 `make run_crash` causes a native crash in *src/example.c*. It sends one event to Sentry
 
@@ -34,8 +45,16 @@ This is for running on Mac. See windows.txt for Windows.
 `make clean` is for re-generating debug symbols and executables
 
 
+### Updating sentry-native
+WARNING - this demo app was tested with sentry-native v0.1.4. It is only intended to work with v0.1.4. If you leave v0.1.4 it is not guaranteed to work. 
+```
+git submodule update
+```
+
 ## Troubleshooting
 If your events are not symbolicated then run `make clean` and re-run commands from step 1
+
+Try running the `make` commands one-by-one because if you run all at once and one of them has a problem, it won't halt execution of the following commands.
 
 You need to always run `bin/example` before `setup_release`
 
