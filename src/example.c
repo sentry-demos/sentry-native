@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
     sentry_options_set_database_path(options, "sentry-db");
     sentry_options_set_debug(options, 1);
 
-    sentry_options_add_attachment(options, "application.log", "application.log");
+    // sentry_options_add_attachment(options, "application.log", "application.log");
 
     sentry_init(options);
 
