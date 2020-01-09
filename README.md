@@ -1,10 +1,9 @@
 ## Overview
-The goal of this is to produce a native crash that gets captured / sent as event to Sentry.
+The goal of this demo is to produce a native crash that gets captured and sent as an event to Sentry.
 
-This project is a demo implementation of **sentry-native**, the Sentry SDK for Native Crash Reporting which you can download here https://github.com/getsentry/sentry-native as a distribution zip for use in Production. This project uses it in its pakcaged release form - it is referenced as a submodule.
+This project is a demo implementation of **sentry-native**, the Sentry SDK for Native Crash Reporting. This demo uses sentry-native in its pakcaged release form - it is referenced as a submodule. You can also download it separately here https://github.com/getsentry/sentry-native as a distribution zip.
 
-**Official Sentry Documentation**  
-Use https://github.com/getsentry/sentry-native when ready to implement this in your real code.
+The **Official Sentry Documentation** for sentry-native is at https://github.com/getsentry/sentry-native 
 
 ## Setup
 | dependency      | version           
