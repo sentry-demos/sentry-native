@@ -7,10 +7,11 @@ This project is a demo implementation of **sentry-native**, the Sentry SDK for N
 Use https://github.com/getsentry/sentry-native when ready to implement this in your real code.
 
 ## Setup
-### Versions
-*sentry-native v0.1.4*  
-*sentry-cli 1.49.0z*  
-*macOS Mojave 10.14.4*  
+| dependency      | version           
+| ------------- |:-------------:| 
+| sentry-native      | 0.1.4
+| sentry-cli   | 1.4.9    |
+| macOS | Mojave 10.14.4      |
 *See windows.txt for Windows*
 
 
@@ -36,7 +37,7 @@ You can also run all of them at once sequentially:
 
 `make setup_release` creates a Sentry Release and associates git commits
 
-`make upload_debug_files` uploads your symbols to Project Settings > Debug Files https://sentry.io/settings/${YOUR_ORG}/projects/${PROJECT}/debug-symbols/  
+`make upload_debug_files` uploads your symbols to Project Settings > Debug Files https://sentry.io/settings/${YOUR_ORG}/projects/${PROJECT}/debug-symbols/. You can also access your symbols from a Symbol Server https://docs.sentry.io/workflow/debug-files/#symbol-servers
 
 `make run_crash` causes a native crash in *src/example.c*. It sends one event to Sentry
 
@@ -46,7 +47,7 @@ You can also run all of them at once sequentially:
 
 
 ### Updating sentry-native
-WARNING - this demo app was tested with sentry-native v0.1.4. It is only intended to work with v0.1.4. If you leave v0.1.4 it is not guaranteed to work. 
+This demo app was tested with sentry-native v0.1.4.
 ```
 git submodule update
 ```
