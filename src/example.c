@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "sentry.h" // references sentry-native
+#include "sentry.h"
 // /bin has crashpad binary executables
 
 #ifdef _WIN32
@@ -63,7 +63,7 @@ void send_event(void)
     sentry_capture_event(event);
 }
 
-// `make run message` or `make run crash`
+// use `make run message` or `make run crash`
 int main(int argc, char *argv[])
 {
     sentry_options_t *options = sentry_options_new();
