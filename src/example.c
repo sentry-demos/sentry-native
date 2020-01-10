@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "sentry.h" // references sentry-native
+#include "sentry.h"
 // /bin has crashpad binary executables
 
 #ifdef _WIN32
@@ -12,7 +12,7 @@ const char *handler_path = "bin/crashpad_handler";
 
 void initialize_memory(char *mem)
 {
-    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Initializing memory"));
+    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Initializing memory"));
     memset(mem, 1, 100);
 }
 
@@ -21,7 +21,7 @@ void startup(void)
     sentry_set_transaction("startup");
     sentry_set_level(SENTRY_LEVEL_ERROR);
 
-    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Setting user to John Doe"));
+    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Setting user to John Doe"));
 
     sentry_value_t user = sentry_value_new_object();
     sentry_value_set_by_key(user, "id", sentry_value_new_int32(42));
@@ -31,14 +31,14 @@ void startup(void)
 
     initialize_memory((char *)0x0);
 
-    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Finished setup"));
+    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Finished setup"));
 }
 
 void send_event(void)
 {
     sentry_set_transaction("send_event");
 
-    // sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
+    sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
 
     sentry_value_t gpu = sentry_value_new_object();
     sentry_value_set_by_key(gpu, "name", sentry_value_new_string("AMD Radeon Pro 560"));
@@ -59,10 +59,11 @@ void send_event(void)
     sentry_value_t event = sentry_value_new_event();
     sentry_value_set_by_key(event, "message", sentry_value_new_string("Sentry Message Capture"));
     sentry_value_set_by_key(event, "contexts", contexts);
+
     sentry_capture_event(event);
 }
 
-// `make run message` or `make run crash`
+// use `make run message` or `make run crash`
 int main(int argc, char *argv[])
 {
     sentry_options_t *options = sentry_options_new();
@@ -76,8 +77,8 @@ int main(int argc, char *argv[])
 
     sentry_options_set_database_path(options, "sentry-db");
     sentry_options_set_debug(options, 1);
-    // sentry_options_add_attachment(options, "application.log",
-    //                               "application.log");
+
+    // sentry_options_add_attachment(options, "application.log", "application.log");
 
     sentry_init(options);
 
