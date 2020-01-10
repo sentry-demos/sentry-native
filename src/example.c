@@ -56,21 +56,9 @@ void send_event(void)
     sentry_value_set_by_key(contexts, "gpu", gpu);
     sentry_value_set_by_key(contexts, "os", os);
 
-    sentry_value_t message_object = sentry_value_new_object();
-    sentry_value_set_by_key(message_object, "message", sentry_value_new_string("The Sentry Message Capture"));
-    sentry_value_set_by_key(message_object, "list", sentry_value_new_string("list of values"));
-
     sentry_value_t event = sentry_value_new_event();
-    // sentry_value_set_by_key(event, "message", sentry_value_new_string("Sentry Message Capture"));
-    sentry_value_set_by_key(event, "message", message_object);
+    sentry_value_set_by_key(event, "message", sentry_value_new_string("Sentry Message Capture"));
     sentry_value_set_by_key(event, "contexts", contexts);
-
-    // {
-    //     "message": {
-    //         "message": "My raw message with interpreted strings like %s",
-    //         "params": ["this"]
-    //     }
-    // }
 
     sentry_capture_event(event);
 }
