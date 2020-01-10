@@ -30,9 +30,11 @@ You can also run all of them at once sequentially:
 
 `make clean` if you need to re-run `make bin/example` and upload new debug files.
 
+You can also run all of them at once sequentially: `make clean bin/example setup_release upload_debug_files run_crash`
+
 ## Technical Notes
 ### What's Happening
-`make bin/example` creates debug symbols and executables  
+`make bin/example` creates debug symbols and executables
 
 `make setup_release` creates a Sentry Release and associates git commits
 
