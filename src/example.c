@@ -62,6 +62,8 @@ void send_event(void)
     sentry_value_set_by_key(event, "message", sentry_value_new_string("Sentry Message Capture"));
     sentry_value_set_by_key(event, "contexts", contexts);
 
+    sentry_set_tag("key_name", "value");
+
     sentry_capture_event(event);
 }
 
