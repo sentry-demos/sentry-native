@@ -1,5 +1,5 @@
 ## Overview
-This project is a demo implementation of **sentry-native**, the Sentry SDK for Native Crash Reporting. The demo produces a native crash that gets captured by sentry-native and sent to Sentry.io This demo uses sentry-native in its pakcaged release form - it is referenced as a submodule. You can also download it separately here https://github.com/getsentry/sentry-native as a distribution zip.
+This project is a demo implementation of **sentry-native**, the Sentry SDK for Native Crash Reporting. The demo produces a native crash that gets captured by sentry-native and sent to Sentry.io This demo uses sentry-native in its packaged release form - it is referenced as a submodule. You can also download it separately here https://github.com/getsentry/sentry-native as a distribution zip.
 
 The **Official Sentry Documentation** for sentry-native is at https://github.com/getsentry/sentry-native 
 
