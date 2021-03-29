@@ -54,6 +54,8 @@ You can also run all of them at once sequentially: `make clean bin/example setup
 This demo app was tested with sentry-native v0.4.8.
 
 ```
+git pull upstream master // or git pull origin master, if you're not on a fork
+git merge upstream/master
 git submodule update --init --recursive
 ```
 
