@@ -1,30 +1,31 @@
 SENTRY_ORG=testorg-az
 SENTRY_PROJECT=sentry-native
-PREFIX=static/js
 VERSION ?= $(shell sentry-cli releases propose-version)
+CMAKE=cmake
 
 all: bin/example
 .PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run_crash run_message clean clean_db
 
 bin/example: prereqs src/example.c
-	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry_crashpad -Wl,-rpath,"@executable_path"
+	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
 
-prereqs: bin/libsentry_crashpad.dylib bin/crashpad_handler
+prereqs: bin/libsentry.dylib bin/crashpad_handler
 
-bin/libsentry_crashpad.dylib: sentry-makefile
-	$(MAKE) -C sentry-native/premake sentry_crashpad
-	cp sentry-native/premake/bin/Release/libsentry_crashpad.dylib bin
-	cp -R sentry-native/premake/bin/Release/libsentry_crashpad.dylib.dSYM bin
+bin/libsentry.dylib: sentry-makefile
+	$(CMAKE) --build build --parallel --target sentry
+	cp build/libsentry.dylib bin
+	cp -R build/libsentry.dylib.dSYM bin
 
 bin/crashpad_handler: sentry-makefile
-	$(MAKE) -C sentry-native/premake crashpad_handler
-	cp sentry-native/premake/bin/Release/crashpad_handler bin
-	cp -R sentry-native/premake/bin/Release/crashpad_handler.dSYM bin
+	$(CMAKE) --build build --parallel --target crashpad_handler
+	cp build/crashpad_build/handler/crashpad_handler bin
+	cp -R build/crashpad_build/handler/crashpad_handler.dSYM bin
 
-sentry-makefile: sentry-native/premake/Makefile
+sentry-makefile: build/Makefile
 
-sentry-native/premake/Makefile:
-	$(MAKE) -C sentry-native fetch configure
+build/Makefile:
+	$(CMAKE) -B build sentry-native
+
 
 # SENTRY
 setup_release: create_release associate_commits
@@ -47,7 +48,7 @@ clean:
 	rm -rf ./bin/exampl*
 	rm -rf ./bin/crash*
 	rm -rf ./bin/libsent*
-	rm -rf ./sentry-native/premake/bin/Release
-	
+	rm -rf ./build
+
 clean_db:
 	rm -rf ./sentry-db/*
