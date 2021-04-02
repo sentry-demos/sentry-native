@@ -29,9 +29,10 @@ void startup(void)
     sentry_value_set_by_key(user, "username", sentry_value_new_string("John Doe"));
     sentry_set_user(user);
 
-    sentry_set_tag("sessionState", "crashed");
+    sentry_set_tag("sessionState", "crashed again");
 
-    initialize_memory((char *)0x0);
+    sentry_remove_transaction();
+    // initialize_memory((char *)0x0);
 
     sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Finished setup"));
 }
