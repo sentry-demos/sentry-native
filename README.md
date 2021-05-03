@@ -14,6 +14,9 @@ The **Official Sentry Documentation** for sentry-native is at https://github.com
 
 _See windows.txt for Windows_
 
+#### CMAKE
+1. brew install cmake
+
 #### sentry-cli
 
 1. `yarn global add @sentry/cli`. You can also get it from https://github.com/getsentry/sentry-cli/releases/ or https://docs.sentry.io/cli/installation/
