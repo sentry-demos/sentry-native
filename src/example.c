@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "sentry.h"
 // /bin has crashpad binary executables
 
@@ -84,9 +85,43 @@ int main(int argc, char *argv[])
 
     // sentry_options_add_attachment(options, "application.log", "application.log");
 
+    printf("CHRIS0");
     sentry_options_set_traces_sample_rate(options, 1.0); // Set sample rate to capture performance data
+    printf("CHRIS1");
 
     sentry_init(options);
+
+    // Trigger transactions
+    sentry_transaction_context_t *tx_ctx
+        = sentry_transaction_context_new("little.teapot",
+            "Short and stout here is my handle and here is my spout");
+
+    sentry_transaction_context_set_sampled(tx_ctx, 0);
+
+    sentry_transaction_t *tx
+        = sentry_transaction_start(tx_ctx, sentry_value_new_null());
+
+    printf("CHRIS2");
+    sentry_transaction_set_status(
+        tx, SENTRY_SPAN_STATUS_INTERNAL_ERROR);
+
+    sentry_span_t *child
+        = sentry_transaction_start_child(tx, "littler.teapot", NULL);
+    sentry_span_t *grandchild
+        = sentry_span_start_child(child, "littlest.teapot", NULL);
+    printf("CHRIS3");
+
+    sentry_span_set_status(child, SENTRY_SPAN_STATUS_NOT_FOUND);
+    sentry_span_set_status(
+        grandchild, SENTRY_SPAN_STATUS_ALREADY_EXISTS);
+
+    sentry_span_finish(grandchild);
+    sentry_span_finish(child);
+
+    sentry_transaction_finish(tx);
+    printf("CHRIS4");
+
+    // End instrument performance
 
     // Native Crash else do a Sentry Message
     if (argc != 2) {
@@ -100,34 +135,6 @@ int main(int argc, char *argv[])
     } else {
         printf("WrongArguments: run \'make run_crash\' or \'make run_message\' \n");
     }
-
-    // Trigger transactions
-    sentry_transaction_context_t *tx_ctx
-        = sentry_transaction_context_new("little.teapot",
-            "Short and stout here is my handle and here is my spout");
-
-    sentry_transaction_context_set_sampled(tx_ctx, 0);
-
-    sentry_transaction_t *tx
-        = sentry_transaction_start(tx_ctx, sentry_value_new_null());
-
-    sentry_transaction_set_status(
-        tx, SENTRY_SPAN_STATUS_INTERNAL_ERROR);
-
-    sentry_span_t *child
-        = sentry_transaction_start_child(tx, "littler.teapot", NULL);
-    sentry_span_t *grandchild
-        = sentry_span_start_child(child, "littlest.teapot", NULL);
-
-    sentry_span_set_status(child, SENTRY_SPAN_STATUS_NOT_FOUND);
-    sentry_span_set_status(
-        grandchild, SENTRY_SPAN_STATUS_ALREADY_EXISTS);
-
-    sentry_span_finish(grandchild);
-    sentry_span_finish(child);
-
-    sentry_transaction_finish(tx);
-    // End instrument performance
 
     sentry_close();
     return 0;
