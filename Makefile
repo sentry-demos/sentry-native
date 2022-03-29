@@ -1,5 +1,5 @@
 SENTRY_ORG=testorg-az
-SENTRY_PROJECT=native
+SENTRY_PROJECT=chris-danny-native-testing
 VERSION ?= $(shell sentry-cli releases propose-version)
 CMAKE=cmake
 
@@ -7,7 +7,7 @@ all: bin/example
 .PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run_crash run_message clean clean_db
 
 bin/example: prereqs src/example.c
-	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
+	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -DSENTRY_PERFORMANCE_MONITORING="ON" -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
 
 prereqs: bin/libsentry.dylib bin/crashpad_handler
 
@@ -39,13 +39,13 @@ upload_debug_files:
 	sentry-cli upload-dif --org testorg-az --project $(SENTRY_PROJECT) --wait --include-sources bin/
 
 run_crash:
-	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example --crash
+	SENTRY_DSN=https://35a178f3e42445ada24add8bca35a226@o87286.ingest.sentry.io/6297711 bin/example --crash
 
 run_message:
-	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example --message
+	SENTRY_DSN=https://35a178f3e42445ada24add8bca35a226@o87286.ingest.sentry.io/6297711 bin/example --message
 
 run_clean:
-	SENTRY_DSN=https://b5ceabee4e4a4cd6b21afe3bd2cbbed4@sentry.io/1720457 bin/example
+	SENTRY_DSN=https://35a178f3e42445ada24add8bca35a226@o87286.ingest.sentry.io/6297711 bin/example
 
 clean:
 	rm -rf ./bin/exampl*
