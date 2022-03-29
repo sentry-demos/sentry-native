@@ -1,5 +1,5 @@
 SENTRY_ORG=testorg-az
-SENTRY_PROJECT=sentry-native
+SENTRY_PROJECT=native
 VERSION ?= $(shell sentry-cli releases propose-version)
 CMAKE=cmake
 
