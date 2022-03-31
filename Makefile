@@ -19,7 +19,7 @@ all: bin/example
 .PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run_crash run_message clean clean_db
 
 bin/example: prereqs src/example.c
-	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -DSENTRY_PERFORMANCE_MONITORING="ON" -lcurl -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
+	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -DSENTRY_PERFORMANCE_MONITORING="ON" -lcurl -mmacosx-version-min=10.6 -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
 
 prereqs: bin/libsentry.dylib bin/crashpad_handler
 

@@ -21,21 +21,14 @@ void initialize_memory(char *mem)
 void api_call(void)
 {
     printf("CHRIS api call");
-
-  CURL *curl;
-  char url[80];
-  CURLcode res;
-
-  strcpy(url,"https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products-join");
-
-  curl = curl_easy_init();
-  if(curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POST, url);
-
-    res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-  }
+    CURL *curl = curl_easy_init();
+    curl_easy_setopt(curl, CURLOPT_URL, 
+        "https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products");
+    curl_easy_perform(curl);
+    sentry_value_t request = sentry_value_new_object();
+    sentry_value_set_by_key(request, "url", sentry_value_new_string("https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products"));
+    sentry_value_set_by_key(request, "method", sentry_value_new_string("GET"));
+    sentry_set_context("request", request);
 }
 
 void startup(void)
@@ -124,14 +117,12 @@ int main(int argc, char *argv[])
 
     sleep(2);
 
-    sentry_span_finish(async);
-
     sentry_span_t *child_filewrite = sentry_transaction_start_child(
-        tx, 
+        async, 
         "file.write", 
         "file write 1"
     );
-    sleep(3);
+    sleep(1);
 
     sentry_span_t *grandchild_network_request_1 = sentry_transaction_start_child(
         tx, 
@@ -139,13 +130,20 @@ int main(int argc, char *argv[])
         "network request 1"
     );
     sleep(2);
+    sentry_span_finish(grandchild_network_request_1);
 
     ////////////////////////////////////////////////
     ///////////// API CALL HERE ////////////////////
     ////////////////////////////////////////////////
     printf("Chris before apicall");
-    // api_call();
-    sentry_span_finish(grandchild_network_request_1);
+    sentry_span_t *call_endpoint = sentry_transaction_start_child(
+        tx, 
+        "http.server", 
+        "call api endpoint"
+    );
+
+    api_call();
+    sentry_span_finish(call_endpoint);
 
     sentry_span_t *grandchild_network_request_2 = sentry_transaction_start_child(
         tx, 
@@ -156,6 +154,8 @@ int main(int argc, char *argv[])
     sentry_span_finish(grandchild_network_request_2);
 
     sentry_span_finish(child_filewrite);
+    sentry_span_finish(async);
+
 
     sentry_span_t *async2 = sentry_transaction_start_child(
         tx, 
