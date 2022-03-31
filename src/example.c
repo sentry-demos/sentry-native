@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "sentry.h"
+#include <curl/curl.h>
 // /bin has crashpad binary executables
 
 #ifdef _WIN32
@@ -14,6 +16,26 @@ void initialize_memory(char *mem)
 {
     sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Initializing memory"));
     memset(mem, 1, 100);
+}
+
+void api_call(void)
+{
+    printf("CHRIS api call");
+
+  CURL *curl;
+  char url[80];
+  CURLcode res;
+
+  strcpy(url,"https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products-join");
+
+  curl = curl_easy_init();
+  if(curl) {
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_POST, url);
+
+    res = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+  }
 }
 
 void startup(void)
@@ -84,67 +106,82 @@ int main(int argc, char *argv[])
 
     // sentry_options_add_attachment(options, "application.log", "application.log");
 
-    printf("CHRIS0");
     sentry_options_set_traces_sample_rate(options, 1.0); // Set sample rate to capture performance data
-    printf("CHRIS1");
 
     sentry_init(options);
 
-    // Transactions can be started by providing the name and the operation
     sentry_transaction_context_t *tx_ctx = sentry_transaction_context_new(
-        "transaction name", 
-        "transaction operation"
+        "renderscreen", 
+        "render.screen"
     );
     sentry_transaction_t *tx = sentry_transaction_start(tx_ctx, sentry_value_new_null());
 
-    // Transactions can have child spans (and those spans can have child spans as well)
-    sentry_span_t *span = sentry_transaction_start_child(
+    sentry_span_t *async = sentry_transaction_start_child(
         tx, 
-        "child operation", 
-        "child description"
+        "http.async", 
+        "async operation 1"
     );
-    printf("CHRIS2");
 
-    // ...
-    // (Perform the operation represented by the span/transaction)
-    // ...
+    sleep(2);
 
-    sentry_span_finish(span); // Mark the span as finished
+    sentry_span_finish(async);
+
+    sentry_span_t *child_filewrite = sentry_transaction_start_child(
+        tx, 
+        "file.write", 
+        "file write 1"
+    );
+    sleep(3);
+
+    sentry_span_t *grandchild_network_request_1 = sentry_transaction_start_child(
+        tx, 
+        "http.server", 
+        "network request 1"
+    );
+    sleep(2);
+
+    ////////////////////////////////////////////////
+    ///////////// API CALL HERE ////////////////////
+    ////////////////////////////////////////////////
+    printf("Chris before apicall");
+    // api_call();
+    sentry_span_finish(grandchild_network_request_1);
+
+    sentry_span_t *grandchild_network_request_2 = sentry_transaction_start_child(
+        tx, 
+        "http.server", 
+        "network request 2"
+    );
+    sleep(1);
+    sentry_span_finish(grandchild_network_request_2);
+
+    sentry_span_finish(child_filewrite);
+
+    sentry_span_t *async2 = sentry_transaction_start_child(
+        tx, 
+        "http.async", 
+        "async operation 2"
+    );
+
+    sleep(2);
+
+    sentry_span_t *fileread = sentry_transaction_start_child(
+        tx, 
+        "file.read", 
+        "file read 1"
+    );
+    sleep(1);
+    sentry_span_finish(fileread);
+
+    sentry_span_t *filewrite = sentry_transaction_start_child(
+        tx, 
+        "file.write", 
+        "file write 2"
+    );
+    sleep(3);
+    sentry_span_finish(filewrite);
+
     sentry_transaction_finish(tx); // Mark the transaction as finished and send 
-
-    printf("CHRIS3");
-
-    // // Trigger transactions
-    // sentry_transaction_context_t *tx_ctx
-    //     = sentry_transaction_context_new("little.teapot",
-    //         "Short and stout here is my handle and here is my spout");
-
-    // sentry_transaction_context_set_sampled(tx_ctx, 0);
-
-    // sentry_transaction_t *tx
-    //     = sentry_transaction_start(tx_ctx, sentry_value_new_null());
-
-    // printf("CHRIS2");
-    // sentry_transaction_set_status(
-    //     tx, SENTRY_SPAN_STATUS_INTERNAL_ERROR);
-
-    // sentry_span_t *child
-    //     = sentry_transaction_start_child(tx, "littler.teapot", NULL);
-    // sentry_span_t *grandchild
-    //     = sentry_span_start_child(child, "littlest.teapot", NULL);
-    // printf("CHRIS3");
-
-    // sentry_span_set_status(child, SENTRY_SPAN_STATUS_NOT_FOUND);
-    // sentry_span_set_status(
-    //     grandchild, SENTRY_SPAN_STATUS_ALREADY_EXISTS);
-
-    // sentry_span_finish(grandchild);
-    // sentry_span_finish(child);
-
-    // sentry_transaction_finish(tx);
-    // printf("CHRIS4");
-
-    // // End instrument performance
 
     // Native Crash else do a Sentry Message
     if (argc != 2) {

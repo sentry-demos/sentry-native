@@ -3,11 +3,23 @@ SENTRY_PROJECT=chris-danny-native-testing
 VERSION ?= $(shell sentry-cli releases propose-version)
 CMAKE=cmake
 
+# This should point to a directory that holds libcurl, if it isn't
+# in the system's standard lib dir
+# We also set a -L to include the directory where we have the openssl
+# libraries
+LDFLAGS = -L/home/dast/lib -L/usr/local/ssl/lib
+
+# We need -lcurl for the curl stuff
+# We need -lsocket and -lnsl when on Solaris
+# We need -lssl and -lcrypto when using libcurl with SSL support
+# We need -lpthread for the pthread example
+LIBS = -lcurl -lsocket -lnsl -lssl -lcrypto
+
 all: bin/example
 .PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run_crash run_message clean clean_db
 
 bin/example: prereqs src/example.c
-	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -DSENTRY_PERFORMANCE_MONITORING="ON" -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
+	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -DSENTRY_PERFORMANCE_MONITORING="ON" -lcurl -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
 
 prereqs: bin/libsentry.dylib bin/crashpad_handler
 
