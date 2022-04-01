@@ -6,8 +6,10 @@ CMAKE=cmake
 all: bin/example
 .PHONY: all prereqs sentry-makefile sentry-makefile setup_release create_release associate_commits upload_debug_files run_crash run_message clean clean_db
 
+# add the following flags if you want to enable the real api call: -lcurl -mmacosx-version-min=10.6
+# note that including `-lcurl` flag will require you to download libcurl locally and set that up.
 bin/example: prereqs src/example.c
-	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -DSENTRY_PERFORMANCE_MONITORING="ON" -lcurl -mmacosx-version-min=10.6 -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
+	$(CC) -g -o $@ -DSENTRY_RELEASE=\"$(VERSION)\" -DSENTRY_PERFORMANCE_MONITORING="ON" -Isentry-native/include src/example.c -Lbin -lsentry -Wl,-rpath,"@executable_path"
 
 prereqs: bin/libsentry.dylib bin/crashpad_handler
 
