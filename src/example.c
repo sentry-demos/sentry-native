@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "sentry.h"
+#include <curl/curl.h>
 // /bin has crashpad binary executables
 
 #ifdef _WIN32
@@ -16,9 +18,25 @@ void initialize_memory(char *mem)
     memset(mem, 1, 100);
 }
 
+// void api_call(void)
+// {
+//     // struct curl_slist *chunk = NULL;
+//     // chunk = curl_slist_append(chunk, "sentry-trace: "); //Need to retrieve and interpolate the current trace-id?
+
+//     printf("CHRIS api call");
+//     CURL *curl = curl_easy_init();
+//     curl_easy_setopt(curl, CURLOPT_URL, 
+//         "https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products");
+//     curl_easy_perform(curl);
+//     sentry_value_t request = sentry_value_new_object();
+//     sentry_value_set_by_key(request, "url", sentry_value_new_string("https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products"));
+//     sentry_value_set_by_key(request, "method", sentry_value_new_string("GET"));
+//     sentry_set_context("request", request);
+// }
+
 void startup(void)
 {
-    sentry_set_transaction("startup");
+    // sentry_set_transaction("startup");
     sentry_set_level(SENTRY_LEVEL_ERROR);
 
     sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Setting user to John Doe"));
@@ -38,7 +56,7 @@ void startup(void)
 
 void send_event(void)
 {
-    sentry_set_transaction("send_event");
+    // sentry_set_transaction("send_event");
 
     sentry_add_breadcrumb(sentry_value_new_breadcrumb(0, "Configuring GPU Context"));
 
@@ -84,7 +102,89 @@ int main(int argc, char *argv[])
 
     // sentry_options_add_attachment(options, "application.log", "application.log");
 
+    sentry_options_set_traces_sample_rate(options, 1.0); // Set sample rate to capture performance data
+
     sentry_init(options);
+
+    sentry_transaction_context_t *tx_ctx = sentry_transaction_context_new(
+        "renderscreen", 
+        "render.screen"
+    );
+    sentry_transaction_t *tx = sentry_transaction_start(tx_ctx, sentry_value_new_null());
+
+    sentry_span_t *async = sentry_transaction_start_child(
+        tx, 
+        "http.async", 
+        "async operation 1"
+    );
+
+    sleep(2);
+
+    sentry_span_t *child_filewrite = sentry_transaction_start_child(
+        tx, 
+        "file.write", 
+        "file write 1"
+    );
+    sleep(1);
+
+    sentry_span_t *grandchild_network_request_1 = sentry_transaction_start_child(
+        tx, 
+        "http.server", 
+        "network request 1"
+    );
+    sleep(2);
+    sentry_span_finish(grandchild_network_request_1);
+
+    ////////////////////////////////////////////////
+    ///////////// API CALL HERE ////////////////////
+    ////////////////////////////////////////////////
+    printf("Chris before apicall");
+    sentry_span_t *call_endpoint = sentry_transaction_start_child(
+        tx, 
+        "http.server", 
+        "call api endpoint"
+    );
+
+    // api_call();
+    sleep(2);
+    sentry_span_finish(call_endpoint);
+
+    sentry_span_t *grandchild_network_request_2 = sentry_transaction_start_child(
+        tx, 
+        "http.server", 
+        "network request 2"
+    );
+    sleep(1);
+    sentry_span_finish(grandchild_network_request_2);
+
+    sentry_span_finish(child_filewrite);
+    sentry_span_finish(async);
+
+    // sentry_span_t *async2 = sentry_transaction_start_child(
+    //     tx, 
+    //     "http.async", 
+    //     "async operation 2"
+    // );
+
+    // sleep(2);
+
+    sentry_span_t *fileread = sentry_transaction_start_child(
+        tx, 
+        "file.read", 
+        "file read 1"
+    );
+    sleep(1);
+    sentry_span_finish(fileread);
+
+    sentry_span_t *filewrite = sentry_transaction_start_child(
+        tx, 
+        "file.write", 
+        "file write 2"
+    );
+    sleep(3);
+    sentry_span_finish(filewrite);
+
+    sentry_transaction_finish(tx); // Mark the transaction as finished and send 
 
     // Native Crash else do a Sentry Message
     if (argc != 2) {
@@ -99,6 +199,6 @@ int main(int argc, char *argv[])
         printf("WrongArguments: run \'make run_crash\' or \'make run_message\' \n");
     }
 
-    sentry_shutdown();
+    sentry_close();
     return 0;
 }
