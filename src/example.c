@@ -20,6 +20,9 @@ void initialize_memory(char *mem)
 
 void api_call(void)
 {
+    // struct curl_slist *chunk = NULL;
+    // chunk = curl_slist_append(chunk, "sentry-trace: "); //Need to retrieve and interpolate the current trace-id?
+
     printf("CHRIS api call");
     CURL *curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_URL, 
@@ -118,7 +121,7 @@ int main(int argc, char *argv[])
     sleep(2);
 
     sentry_span_t *child_filewrite = sentry_transaction_start_child(
-        async, 
+        tx, 
         "file.write", 
         "file write 1"
     );
@@ -142,7 +145,8 @@ int main(int argc, char *argv[])
         "call api endpoint"
     );
 
-    api_call();
+    // api_call();
+    sleep(2);
     sentry_span_finish(call_endpoint);
 
     sentry_span_t *grandchild_network_request_2 = sentry_transaction_start_child(
@@ -156,14 +160,13 @@ int main(int argc, char *argv[])
     sentry_span_finish(child_filewrite);
     sentry_span_finish(async);
 
+    // sentry_span_t *async2 = sentry_transaction_start_child(
+    //     tx, 
+    //     "http.async", 
+    //     "async operation 2"
+    // );
 
-    sentry_span_t *async2 = sentry_transaction_start_child(
-        tx, 
-        "http.async", 
-        "async operation 2"
-    );
-
-    sleep(2);
+    // sleep(2);
 
     sentry_span_t *fileread = sentry_transaction_start_child(
         tx, 
