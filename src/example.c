@@ -18,21 +18,21 @@ void initialize_memory(char *mem)
     memset(mem, 1, 100);
 }
 
-void api_call(void)
-{
-    // struct curl_slist *chunk = NULL;
-    // chunk = curl_slist_append(chunk, "sentry-trace: "); //Need to retrieve and interpolate the current trace-id?
+// void api_call(void)
+// {
+//     // struct curl_slist *chunk = NULL;
+//     // chunk = curl_slist_append(chunk, "sentry-trace: "); //Need to retrieve and interpolate the current trace-id?
 
-    printf("CHRIS api call");
-    CURL *curl = curl_easy_init();
-    curl_easy_setopt(curl, CURLOPT_URL, 
-        "https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products");
-    curl_easy_perform(curl);
-    sentry_value_t request = sentry_value_new_object();
-    sentry_value_set_by_key(request, "url", sentry_value_new_string("https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products"));
-    sentry_value_set_by_key(request, "method", sentry_value_new_string("GET"));
-    sentry_set_context("request", request);
-}
+//     printf("CHRIS api call");
+//     CURL *curl = curl_easy_init();
+//     curl_easy_setopt(curl, CURLOPT_URL, 
+//         "https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products");
+//     curl_easy_perform(curl);
+//     sentry_value_t request = sentry_value_new_object();
+//     sentry_value_set_by_key(request, "url", sentry_value_new_string("https://application-monitoring-flask-dot-sales-engineering-sf.appspot.com/products"));
+//     sentry_value_set_by_key(request, "method", sentry_value_new_string("GET"));
+//     sentry_set_context("request", request);
+// }
 
 void startup(void)
 {
