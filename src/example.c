@@ -65,6 +65,15 @@ void send_event(void)
     sentry_set_tag("key_name", "value");
 
     sentry_capture_event(event);
+    // const auto forceQuitEvent = sentry_value_new_message_event(
+	// 			"fatal",
+	// 			nullptr,
+	// 			"inErrorDescription");
+    
+    // auto exception = sentry_value_new_exception(inErrorDescription, inErrorDescription);
+
+    // sentry_event_add_exception(forceQuitEvent, exception);
+	// sentry_capture_event(forceQuitEvent);
 }
 
 // use `make run message` or `make run crash`
