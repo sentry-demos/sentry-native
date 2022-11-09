@@ -1,6 +1,5 @@
-SENTRY_AUTH_TOKEN=2cf09ac0cc6a4449a91e45ad00e77345e76eeb1a27394ebda2eda3c726ffbf9a
 SENTRY_ORG=testorg-az
-SENTRY_PROJECT=native
+SENTRY_PROJECT=sentry-native
 VERSION ?= $(shell sentry-cli releases propose-version)
 CMAKE=cmake
 
