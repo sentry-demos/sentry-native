@@ -80,7 +80,12 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
-          sentry-cli debug-files upload --include-sources --wait build/
+          # Upload only our binaries and their debug companions (.dSYM / .pdb /
+          # ELF). Scanning all of build/ also picks up the bundled crash reporter
+          # and FetchContent artifacts, which can trip the uploader.
+          shopt -s nullglob
+          files=(build/empower-fleet* build/empower-headless* build/empower-smoke* build/sentry-crash*)
+          sentry-cli debug-files upload --include-sources --wait "${files[@]}"
 
       - name: Finalize release
         shell: bash

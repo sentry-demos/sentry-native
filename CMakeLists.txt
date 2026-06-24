@@ -75,10 +75,19 @@ add_library(empower_core STATIC
     src/app/fleet_model.cpp
     src/chaos/chaos.cpp)
 find_package(Threads REQUIRED)
-find_package(CURL REQUIRED)
 target_include_directories(empower_core PUBLIC src)
-target_link_libraries(empower_core PUBLIC sentry::sentry Threads::Threads CURL::libcurl)
+target_link_libraries(empower_core PUBLIC sentry::sentry Threads::Threads)
 target_compile_definitions(empower_core PUBLIC EMPOWER_RELEASE="${EMPOWER_RELEASE}")
+
+# Backend HTTP client: libcurl where available (Linux/macOS), WinHTTP on Windows
+# (the runners have no libcurl), so the distributed-trace call works everywhere.
+find_package(CURL QUIET)
+if(CURL_FOUND)
+    target_link_libraries(empower_core PUBLIC CURL::libcurl)
+    target_compile_definitions(empower_core PUBLIC EMPOWER_HAVE_CURL=1)
+elseif(WIN32)
+    target_link_libraries(empower_core PUBLIC winhttp)
+endif()
 
 # Copy the native backend's out-of-process crash daemon (sentry-crash) next to a
 # target so the SDK can launch it at runtime. The native backend builds this as
@@ -139,6 +148,9 @@ if(EMPOWER_BUILD_GUI)
     set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+    # X11 only: avoids needing the Wayland toolchain (wayland-scanner et al.) on
+    # Linux CI. X11 apps run fine under Wayland compositors via XWayland.
+    set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(glfw
         GIT_REPOSITORY https://github.com/glfw/glfw.git
         GIT_TAG 3.4
