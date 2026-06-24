@@ -1,79 +1,143 @@
-## Overview
+# Empower Plant — Fleet Control Center
 
-This project is a demo implementation of **sentry-native**, the Sentry SDK for Native Crash Reporting. The demo produces a native crash that gets captured by sentry-native and sent to Sentry.io This demo uses sentry-native in its packaged release form - it is referenced as a submodule. You can also download it separately here https://github.com/getsentry/sentry-native as a distribution zip.
+A modern, cross-platform demo for **[sentry-native](https://github.com/getsentry/sentry-native)**, the Sentry SDK for native (C/C++) applications.
 
-The **Official Sentry Documentation** for sentry-native is at https://github.com/getsentry/sentry-native
+It is a desktop control center for a fictional fleet of Empower Plant IoT devices: a GPU-rendered dashboard with live telemetry, background pipelines, a real backend integration, and a **Chaos Lab** that triggers a curated taxonomy of crashes, hangs and errors — each instrumented with breadcrumbs, spans, tags, contexts and attachments so the resulting Sentry issue is fully debuggable (and a great showcase for Seer's root-cause analysis).
 
-## Setup
+It runs on **Linux, macOS and Windows** and uses the new out-of-process **`native` crash backend** (no Breakpad, Crashpad or in-process handler).
 
-| dependency    |    version     |
-| ------------- | :------------: |
-| sentry-native |     0.4.8      |
-| sentry-cli    |     1.4.9      |
-| macOS         | Mojave 10.14.4 |
+![Fleet Control Center](assets/screenshots/fleet.png)
 
-_See windows.txt for Windows_
+## Quick start
 
-#### CMAKE
-1. brew install cmake
+### Prerequisites
 
-#### sentry-cli
+All platforms need a **C++17 compiler**, **CMake ≥ 3.16**, and **Git**. Everything else — the Sentry SDK, GLFW, Dear ImGui, the Rubik and Font Awesome fonts, and stb — is fetched automatically by CMake on first configure (so the first build needs network access).
 
-1. `yarn global add @sentry/cli`. You can also get it from https://github.com/getsentry/sentry-cli/releases/ or https://docs.sentry.io/cli/installation/
+| OS | Install |
+| --- | --- |
+| **Linux** (Debian/Ubuntu) | `sudo apt-get install build-essential cmake git xorg-dev libgl1-mesa-dev libcurl4-openssl-dev` |
+| **macOS** | `xcode-select --install` and `brew install cmake` (uses the system OpenGL and libcurl) |
+| **Windows** | [Visual Studio 2022](https://visualstudio.microsoft.com/) with the *Desktop development with C++* workload, plus [CMake](https://cmake.org/download/) and Git. CMake's default generator finds MSVC — no extra setup. |
 
-#### Mac
+### Build & run
 
-1. `git clone --recurse-submodules https://github.com/getsentry/sentry-native.git`
-2. `make bin/example`
-3. `make setup_release`
-4. `make upload_debug_files`
-5. `make run_crash` or `make run_message`
+**Linux / macOS** — a convenience `Makefile` wraps CMake:
 
-You can also run all of them at once sequentially:  
-`make clean bin/example setup_release upload_debug_files run_crash`
-
-`make clean` if you need to re-run `make bin/example` and upload new debug files.
-
-You can also run all of them at once sequentially: `make clean bin/example setup_release upload_debug_files run_crash`
-
-## Technical Notes
-
-### What's Happening
-
-`make bin/example` creates debug symbols and executables
-
-`make setup_release` creates a Sentry Release and associates git commits
-
-`make upload_debug_files` uploads your symbols to Project Settings > Debug Files https://sentry.io/settings/${YOUR_ORG}/projects/${PROJECT}/debug-symbols/. You can also access your symbols from a Symbol Server https://docs.sentry.io/workflow/debug-files/#symbol-servers
-
-`make run_crash` causes a native crash in _src/example.c_. It sends one event to Sentry
-
-`make run_message` causes a Sentry Message to get sent as an event to Sentry.
-
-`make clean` is for re-generating debug symbols and executables
-
-### Upgrade Pathway
-
-This demo app was tested with sentry-native v0.4.8.
-
-```
-git pull // gets latest code
-git submodule update --init --recursive // updates the 'sentry-native' submodule
-make bin/example // or make all. start building again, with the newer Release of sentry-native
+```sh
+export SENTRY_DSN="https://<key>@<org>.ingest.sentry.io/<project>"
+make run            # builds, then launches the GUI
 ```
 
-## Troubleshooting
+Or drive CMake directly:
 
-If your events are not symbolicated then run `make clean` and re-run commands from step 1
+```sh
+cmake -B build -S . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DEMPOWER_BUILD_GUI=ON
+cmake --build build --parallel
+./build/empower-fleet
+```
 
-Try running the `make` commands one-by-one because if you run all at once and one of them has a problem, it won't halt execution of the following commands.
+**Windows** (Developer Command Prompt or PowerShell):
 
-You need to always run `bin/example` before `setup_release`
+```bat
+cmake -B build -S . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DEMPOWER_BUILD_GUI=ON
+cmake --build build --config RelWithDebInfo --parallel
+set SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
+build\empower-fleet.exe
+```
 
-If the standalone distribution package doesn't fit your needs, then go to https://github.com/getsentry/sentry-native#development
+Without a `SENTRY_DSN` the app still runs, but events are dropped instead of being sent. Open the **Chaos Lab** tab and trigger any fault — the `Convoluted Chain` is the headline scenario for Seer.
 
-sentry-native in the news https://blog.sentry.io/2019/09/26/fixing-native-apps-with-sentry
+The build produces three binaries (each with the `sentry-crash` daemon copied next to it):
 
-## Gif
+- `empower-fleet` — the GUI Fleet Control Center
+- `empower-headless` — headless autopilot / remote command listener (used by CI)
+- `empower-smoke` — a connectivity smoke test
 
-![gif](screenshots/sentry-native-crash-final.gif)
+> On macOS the binaries are ad-hoc codesigned at build time with the `get-task-allow` entitlement ([cmake/get-task-allow.entitlements](cmake/get-task-allow.entitlements)) so the crash daemon can capture **full** minidumps.
+
+## What it demonstrates
+
+| Area | Detail |
+| --- | --- |
+| **Crash reporting** | New `native` backend with out-of-process minidump daemon + client-side stackwalk, async upload |
+| **Crash taxonomy** | Null deref, use-after-free (cross-thread), stack overflow, divide-by-zero, heap corruption, abort, GPU device-lost, app-hang, and a **convoluted chain** (corruption now, crash later, far away) |
+| **Performance** | Transactions and child spans around pipelines and backend calls |
+| **Distributed tracing** | `sentry-trace` / `baggage` propagation to the shared Empower Plant Flask backend |
+| **Structured logs** | `sentry_log_*`, streamed live on the Telemetry page |
+| **Metrics** | `sentry_metrics_gauge` / `_distribution` for frame time, queue depth, devices online |
+| **Sessions / release health** | Automatic session tracking |
+| **App-hang / ANR** | App-hang watchdog with a UI-thread heartbeat |
+| **Attachments** | Calibration blobs and a **live UI screenshot** attached to events on every platform |
+| **Screenshots** | SDK screenshot capture on Windows; offscreen-rendered UI PNG attachment elsewhere |
+| **External crash reporter** | Auto-wires the official [sentry-desktop-crash-reporter](https://github.com/getsentry/sentry-desktop-crash-reporter), themed for Empower Plant |
+| **User feedback** | Collected through the external crash reporter |
+
+| Telemetry | Chaos Lab |
+| --- | --- |
+| ![Telemetry](assets/screenshots/telemetry.png) | ![Chaos Lab](assets/screenshots/chaos-lab.png) |
+
+## Configuration (environment variables)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SENTRY_DSN` | — | Sentry DSN; events are dropped if unset |
+| `SENTRY_ENVIRONMENT` | `production` | Sentry environment |
+| `SENTRY_RELEASE` | baked in at build time (`empower.native@<git-sha>`) | Release identifier; matches the release CI creates |
+| `EMPOWER_BACKEND_URL` | `https://flask.empower-plant.com` | Backend used for distributed tracing |
+| `EMPOWER_CRASH_REPORTER` | auto-detected next to the binary | Path to the external crash reporter |
+| `EMPOWER_DEBUG` | unset | Set to enable verbose SDK logging |
+
+## Headless & remote control
+
+The same core runs without a window — used by CI to ingest events on a schedule.
+
+```sh
+# Self-drive for 90s emitting transactions/metrics/logs, then crash:
+build/empower-headless --autopilot --duration 90
+
+# Run a single scenario by id:
+build/empower-headless --crash convoluted
+
+# Accept remote commands over HTTP:
+build/empower-headless --listen 8799
+curl -X POST http://127.0.0.1:8799/trigger/heap-corruption
+```
+
+The GUI also renders a screenshot offscreen for review/CI without a display:
+
+```sh
+build/empower-fleet --shot fleet.png --page 0
+```
+
+## CI
+
+Two GitHub Actions workflows under [.github/workflows](.github/workflows):
+
+- **`ci.yml`** builds on Linux/macOS/Windows, generates debug symbols (`.dSYM` / `.pdb` / ELF), uploads debug information files with `sentry-cli debug-files upload --include-sources`, creates a Sentry release, bundles the external crash reporter, and publishes build artifacts.
+- **`run-demo.yml`** runs on a schedule, downloads the latest build per OS, and runs the autopilot (which is expected to crash), continuously feeding meaningful, symbolicated events into the project.
+
+Both require the `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT` and `SENTRY_AUTH_TOKEN` secrets.
+
+## The crash taxonomy
+
+Every Chaos Lab scenario and the exact fault it produces is documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Open source
+
+This demo is built on the following open-source components, all fetched at build time (nothing is vendored into the repository). Their licenses are permissive and compatible with this project's Apache-2.0 license:
+
+| Component | Used for | License |
+| --- | --- | --- |
+| [sentry-native](https://github.com/getsentry/sentry-native) | Sentry SDK + native crash backend | MIT |
+| [Dear ImGui](https://github.com/ocornut/imgui) | Immediate-mode GUI | MIT |
+| [GLFW](https://github.com/glfw/glfw) | Window + OpenGL context | Zlib |
+| [stb_image_write](https://github.com/nothings/stb) | PNG screenshot encoding | Public Domain / MIT |
+| [libcurl](https://curl.se/libcurl/) | HTTP for distributed-trace backend calls | curl (MIT-style) |
+| [Rubik](https://github.com/googlefonts/rubik) | UI typeface | SIL Open Font License 1.1 |
+| [Font Awesome 6 Free](https://github.com/FortAwesome/Font-Awesome) | UI icons | SIL OFL 1.1 (fonts) · CC BY 4.0 (icons) · MIT (code) |
+| [sentry-desktop-crash-reporter](https://github.com/getsentry/sentry-desktop-crash-reporter) | External crash reporter UI | MIT |
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE). Copyright Functional Software, Inc. dba Sentry.

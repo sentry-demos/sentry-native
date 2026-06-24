@@ -1,4 +1,18 @@
-/sentry-db
-notes
-.vscode
+# Build output
+/build/
+/cmake-build-*/
 build
+.vscode
+
+# Sentry runtime database / unsent envelopes / minidumps
+.sentry-native/
+/sentry-db
+*.dmp
+
+# Downloaded third-party crash reporter binaries (fetched in CI / scripts)
+/third_party/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+notes

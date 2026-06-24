@@ -1,0 +1,106 @@
+name: ci
+
+# Builds the Empower Plant native demo on Linux, macOS and Windows, uploads
+# debug information files to Sentry, creates a release, and publishes the build
+# artifacts that the scheduled run-demo workflow consumes.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Don't run on forks - the secrets below only exist in sentry-demos.
+    if: github.repository_owner == 'sentry-demos'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: macos-latest
+            name: macos
+          - os: windows-latest
+            name: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Linux build dependencies
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          # GLFW needs the X11/OpenGL dev headers; libcurl for the SDK transport.
+          sudo apt-get install -y libcurl4-openssl-dev xorg-dev libgl1-mesa-dev
+
+      # No MSVC-setup action needed: CMake's default generator on the Windows
+      # runner is Visual Studio 2022, which finds the toolchain itself.
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DEMPOWER_BUILD_GUI=ON
+
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo --parallel
+
+      - name: Generate macOS debug symbols (.dSYM)
+        if: matrix.name == 'macos'
+        run: |
+          for bin in empower-fleet empower-headless empower-smoke sentry-crash; do
+            dsymutil "build/$bin" -o "build/$bin.dSYM" || true
+          done
+
+      - name: Bundle the external crash reporter
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/fetch-crash-reporter.sh build || echo "crash reporter bundling skipped"
+
+      - name: Install sentry-cli
+        run: npm install -g @sentry/cli
+
+      - name: Create Sentry release
+        shell: bash
+        env:
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          VERSION="empower.native@$(git rev-parse --short HEAD)"
+          echo "SENTRY_RELEASE=$VERSION" >> "$GITHUB_ENV"
+          sentry-cli releases new "$VERSION"
+          sentry-cli releases set-commits "$VERSION" --auto --ignore-missing
+
+      - name: Upload debug information files
+        shell: bash
+        env:
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          sentry-cli debug-files upload --include-sources --wait build/
+
+      - name: Finalize release
+        shell: bash
+        env:
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: sentry-cli releases finalize "$SENTRY_RELEASE"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: empower-native-${{ matrix.name }}
+          retention-days: 14
+          path: |
+            build/empower-fleet*
+            build/empower-headless*
+            build/sentry-crash*
+            build/screenshot.png
+            build/assets/**
+            build/appsettings.json
+            build/Sentry*
+            build/*CrashReporter*
