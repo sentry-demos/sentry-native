@@ -89,6 +89,11 @@ elseif(WIN32)
     target_link_libraries(empower_core PUBLIC winhttp)
 endif()
 
+# Winsock for the remote command server (used on Windows).
+if(WIN32)
+    target_link_libraries(empower_core PUBLIC ws2_32)
+endif()
+
 # Copy the native backend's out-of-process crash daemon (sentry-crash) next to a
 # target so the SDK can launch it at runtime. The native backend builds this as
 # the `sentry-crash` executable target.
