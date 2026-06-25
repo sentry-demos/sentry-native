@@ -1,0 +1,54 @@
+name: run-demo
+
+# Periodically runs the headless demo so the Sentry project receives a steady
+# stream of meaningful events (transactions, metrics, logs and a crash) across
+# Linux, macOS and Windows. Mirrors the pattern used by the other sentry-demos.
+
+on:
+  schedule:
+    - cron: '*/50 * * * *' # every 50 minutes
+  workflow_dispatch:
+
+jobs:
+  run:
+    if: github.repository_owner == 'sentry-demos'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+            bin: empower-headless
+          - os: macos-latest
+            name: macos
+            bin: empower-headless
+          - os: windows-latest
+            name: windows
+            bin: empower-headless.exe
+    runs-on: ${{ matrix.os }}
+    env:
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      SENTRY_ENVIRONMENT: demo
+    steps:
+      - name: Download the latest build artifact
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          workflow_conclusion: success
+          name: empower-native-${{ matrix.name }}
+          path: artifact
+
+      - name: Run the autopilot (expects a crash)
+        shell: bash
+        run: |
+          chmod +x "artifact/${{ matrix.bin }}" "artifact/sentry-crash" 2>/dev/null || true
+          set +e
+          "artifact/${{ matrix.bin }}" --autopilot --duration 90
+          code=$?
+          # The autopilot is designed to crash at the end; a clean exit means
+          # the final fault did not fire, which is itself a failure.
+          if [ "$code" -eq 0 ]; then
+            echo "::error::autopilot exited 0 - expected a crash"
+            exit 1
+          fi
+          echo "autopilot crashed as expected (exit $code) - events ingested"

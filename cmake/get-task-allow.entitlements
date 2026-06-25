@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Lets the same-user sentry-crash daemon call task_for_pid() on this
+         process so the native backend can write a FULL minidump on macOS.
+         Without it, task_for_pid is denied and only a minimal dump is written. -->
+    <key>com.apple.security.get-task-allow</key>
+    <true/>
+</dict>
+</plist>

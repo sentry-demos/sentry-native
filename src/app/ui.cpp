@@ -1,0 +1,737 @@
+#include "app/ui.h"
+
+#include "app/console_log.h"
+#include "app/fleet_model.h"
+#include "app/icons.h"
+#include "app/theme.h"
+#include "chaos/chaos.h"
+
+#include "imgui.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdarg>
+#include <cstdio>
+#include <string>
+
+namespace empower {
+
+namespace {
+
+struct Nav { const char* icon; const char* label; const char* subtitle; };
+const Nav kNav[] = {
+    {ICON_SEEDLING, "Fleet", "Live status across every Empower Plant device"},
+    {ICON_CHART, "Telemetry", "Metrics and logs streaming to Sentry"},
+    {ICON_PIPELINE, "Pipelines", "Background jobs processing device data"},
+    {ICON_BUG, "Chaos Lab", "Trigger faults and ship them to Sentry"},
+    {ICON_GEAR, "Settings", "SDK configuration and enabled features"},
+};
+
+ImU32 u32(ImVec4 c) { return ImGui::GetColorU32(c); }
+ImVec4 with_alpha(ImVec4 c, float a) { c.w = a; return c; }
+
+ImVec4 status_color(Device::Status s) {
+    switch (s) {
+        case Device::Status::Ok: return theme::color::ok;
+        case Device::Status::Warning: return theme::color::warn;
+        case Device::Status::Error: return theme::color::danger;
+        case Device::Status::Offline: return theme::color::text_faint;
+    }
+    return theme::color::text_faint;
+}
+
+void dim_text(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::TextV(fmt, args);
+    ImGui::PopStyleColor();
+    va_end(args);
+}
+
+void heading(ImFont* font, const char* text, ImVec4 col = theme::color::text) {
+    ImGui::PushFont(font);
+    ImGui::PushStyleColor(ImGuiCol_Text, col);
+    ImGui::TextUnformatted(text);
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+}
+
+std::string with_icon(const char* icon, const char* label) {
+    if (theme::has_icons()) return std::string(icon) + "   " + label;
+    return label;
+}
+
+void status_dot(ImVec4 col, float radius = 4.5f) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float cy = p.y + ImGui::GetTextLineHeight() * 0.5f;
+    ImVec2 center(p.x + radius + 1, cy);
+    dl->AddCircleFilled(center, radius + 2.5f, u32(with_alpha(col, 0.22f)), 20);
+    dl->AddCircleFilled(center, radius, u32(col), 20);
+    ImGui::Dummy(ImVec2(radius * 2 + 8, ImGui::GetTextLineHeight()));
+}
+
+void chip(const char* text, ImVec4 col) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 pad(9, 3);
+    ImVec2 sz = ImGui::CalcTextSize(text);
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImVec2 p1(p0.x + sz.x + pad.x * 2, p0.y + sz.y + pad.y * 2);
+    dl->AddRectFilled(p0, p1, u32(with_alpha(col, 0.16f)), 20.0f);
+    dl->AddText(ImVec2(p0.x + pad.x, p0.y + pad.y), u32(col), text);
+    ImGui::Dummy(ImVec2(sz.x + pad.x * 2, sz.y + pad.y * 2));
+}
+
+// One aligned meter line: [icon LABEL] [bar] [value%], all on one baseline.
+void meter_row(const char* icon, const char* label, float v, ImVec4 col) {
+    float full = ImGui::GetContentRegionAvail().x;
+    ImGui::PushFont(theme::fonts().small);
+    float fs = ImGui::GetFontSize();
+    float row_h = fs + 4;
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    float cy = p0.y + row_h * 0.5f;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+
+    std::string lbl = with_icon(icon, label);
+    dl->AddText(ImGui::GetFont(), fs, ImVec2(p0.x, cy - fs * 0.5f),
+                u32(theme::color::text_dim), lbl.c_str());
+
+    const float label_w = 86, value_w = 40, bar_h = 6;
+    float bx = p0.x + label_w, bw = full - label_w - value_w;
+    dl->AddRectFilled(ImVec2(bx, cy - bar_h * 0.5f), ImVec2(bx + bw, cy + bar_h * 0.5f),
+                      u32(theme::color::surface_hi), bar_h * 0.5f);
+    dl->AddRectFilled(ImVec2(bx, cy - bar_h * 0.5f), ImVec2(bx + bw * v, cy + bar_h * 0.5f),
+                      u32(col), bar_h * 0.5f);
+
+    char buf[8];
+    std::snprintf(buf, sizeof(buf), "%.0f%%", v * 100.0f);
+    ImVec2 ts = ImGui::CalcTextSize(buf);
+    dl->AddText(ImGui::GetFont(), fs, ImVec2(p0.x + full - ts.x, cy - fs * 0.5f),
+                u32(theme::color::text_dim), buf);
+    ImGui::PopFont();
+    ImGui::Dummy(ImVec2(full, row_h));
+}
+
+bool begin_card(const char* id, float height = 0.0f) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::color::surface);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16, 14));
+    ImGuiChildFlags cf = ImGuiChildFlags_Borders;
+    ImVec2 size(-FLT_MIN, height);
+    if (height <= 0.0f) { cf |= ImGuiChildFlags_AutoResizeY; size.y = 0; }
+    return ImGui::BeginChild(id, size, cf,
+                             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+}
+void end_card() {
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+}
+
+int column_count(float min_w, int max_cols) {
+    float avail = ImGui::GetContentRegionAvail().x;
+    int n = static_cast<int>((avail + 14) / (min_w + 14));
+    return std::max(1, std::min(n, max_cols));
+}
+
+void center_cursor_x(float content_w) {
+    float avail = ImGui::GetContentRegionAvail().x;
+    if (avail > content_w) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - content_w) * 0.5f);
+}
+
+// ---- Sidebar -------------------------------------------------------------
+void brand_mark() {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float s = 34;
+    center_cursor_x(s);
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    dl->AddRectFilled(p, ImVec2(p.x + s, p.y + s), u32(theme::color::accent), 10.0f);
+    if (theme::has_icons()) {
+        ImGui::PushFont(theme::fonts().h2);
+        ImVec2 ts = ImGui::CalcTextSize(ICON_LEAF);
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                    ImVec2(p.x + (s - ts.x) * 0.5f, p.y + (s - ts.y) * 0.5f),
+                    u32(theme::color::bg), ICON_LEAF);
+        ImGui::PopFont();
+    }
+    ImGui::Dummy(ImVec2(s, s));
+    ImGui::Dummy(ImVec2(0, 8));
+
+    ImGui::PushFont(theme::fonts().h2);
+    float w = ImGui::CalcTextSize("Empower").x + 6 + ImGui::CalcTextSize("Plant").x;
+    center_cursor_x(w);
+    ImGui::TextUnformatted("Empower");
+    ImGui::SameLine(0, 6);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent);
+    ImGui::TextUnformatted("Plant");
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+
+    ImGui::PushFont(theme::fonts().small);
+    center_cursor_x(ImGui::CalcTextSize("FLEET CONTROL").x);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
+    ImGui::TextUnformatted("FLEET CONTROL");
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+}
+
+void nav_item(const Nav& n, int i, AppState& st) {
+    bool selected = st.page == i;
+    const float right_margin = 12.0f, row_h = 34.0f;
+    float w = ImGui::GetContentRegionAvail().x - right_margin;
+
+    ImGui::PushFont(theme::fonts().bold);
+    ImGui::PushStyleColor(ImGuiCol_Header, selected ? with_alpha(theme::color::accent, 0.18f)
+                                                    : ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, theme::color::surface_hi);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, with_alpha(theme::color::accent, 0.30f));
+    ImGui::PushStyleColor(ImGuiCol_Text, selected ? theme::color::accent_hi : theme::color::text_dim);
+    std::string label = "  " + with_icon(n.icon, n.label); // left text padding inside the row
+    if (ImGui::Selectable(label.c_str(), selected, 0, ImVec2(w, row_h))) st.page = i;
+    if (selected) {
+        ImVec2 mn = ImGui::GetItemRectMin();
+        ImVec2 mx = ImGui::GetItemRectMax();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImVec2(mn.x, mn.y + 7), ImVec2(mn.x + 3, mx.y - 7), u32(theme::color::accent), 2);
+    }
+    ImGui::PopStyleColor(4);
+    ImGui::PopFont();
+}
+
+void avatar(const char* initials) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float r = 19;
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    ImVec2 c(p.x + r, p.y + r);
+    dl->AddCircleFilled(c, r, u32(with_alpha(theme::color::accent, 0.22f)), 32);
+    dl->AddCircle(c, r, u32(with_alpha(theme::color::accent, 0.55f)), 32, 1.5f);
+    ImGui::PushFont(theme::fonts().body);
+    ImVec2 ts = ImGui::CalcTextSize(initials);
+    dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f), u32(theme::color::accent_hi), initials);
+    ImGui::PopFont();
+    ImGui::Dummy(ImVec2(r * 2, r * 2));
+}
+
+std::string initials_of(const std::string& name) {
+    std::string out;
+    bool at_start = true;
+    for (char ch : name) {
+        if (ch == ' ') { at_start = true; continue; }
+        if (at_start && out.size() < 2) out.push_back((char)std::toupper(ch));
+        at_start = false;
+    }
+    return out.empty() ? "?" : out;
+}
+
+void render_sidebar(AppState& st) {
+    // Rendered directly into the sidebar wrapper (no nested child) so the brand
+    // mark shares the same top padding as the page header and status pill.
+    brand_mark();
+    ImGui::Dummy(ImVec2(0, 18));
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
+    ImGui::PushFont(theme::fonts().small);
+    ImGui::TextUnformatted("MENU");
+    ImGui::PopFont();
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0, 2));
+
+    // Vertically center the icon + label within each (taller) nav row.
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+    for (int i = 0; i < IM_ARRAYSIZE(kNav); ++i) nav_item(kNav[i], i, st);
+    ImGui::PopStyleVar(2);
+
+    // Operator card, raised slightly off the bottom to match the content margin.
+    float card_h = 84;
+    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - card_h);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::color::surface);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(13, 12));
+    ImGui::BeginChild("operator", ImVec2(0, card_h), true,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    avatar(initials_of(st.operator_name).c_str());
+    ImGui::SameLine(0, 11);
+    ImGui::BeginGroup();
+    ImGui::TextUnformatted(st.operator_name.c_str());
+    ImGui::PushFont(theme::fonts().small);
+    dim_text("Operator  -  %s", st.environment.c_str());
+    status_dot(st.dsn_configured ? theme::color::ok : theme::color::warn, 3.5f);
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Text, st.dsn_configured ? theme::color::ok : theme::color::warn);
+    ImGui::TextUnformatted(st.dsn_configured ? "connected" : "no dsn");
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+    ImGui::EndGroup();
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+}
+
+// ---- Header --------------------------------------------------------------
+void render_header(AppState& st) {
+    FleetModel& f = *st.fleet;
+    ImVec2 tp = ImGui::GetCursorScreenPos();
+    ImGui::PushFont(theme::fonts().h1);
+    float h1h = ImGui::GetTextLineHeight();
+    ImGui::PopFont();
+    heading(theme::fonts().h1, with_icon(kNav[st.page].icon, kNav[st.page].label).c_str());
+
+    // Right-aligned status pill, vertically centered on the title.
+    float cy = tp.y + h1h * 0.5f;
+    char online[24];
+    std::snprintf(online, sizeof(online), "%d online", f.online_count());
+    const char* env = st.environment.c_str();
+    ImGui::PushFont(theme::fonts().body);
+    float fs = ImGui::GetFontSize();
+    float ow = ImGui::CalcTextSize(online).x, ew = ImGui::CalcTextSize(env).x;
+    const float padx = 14, dotr = 4, gap = 9, sep = 12, h = fs + 12;
+    float w = padx + dotr * 2 + gap + ow + sep + 1 + sep + ew + padx;
+    float rx = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 a(rx - w, cy - h * 0.5f), b(rx, cy + h * 0.5f);
+    dl->AddRectFilled(a, b, u32(theme::color::surface_hi), h * 0.5f);
+    dl->AddRect(a, b, u32(theme::color::border), h * 0.5f);
+    float x = a.x + padx;
+    ImVec4 dc = f.alert_count() ? theme::color::warn : theme::color::ok;
+    dl->AddCircleFilled(ImVec2(x + dotr, cy), dotr + 2, u32(with_alpha(dc, 0.3f)));
+    dl->AddCircleFilled(ImVec2(x + dotr, cy), dotr, u32(dc));
+    x += dotr * 2 + gap;
+    dl->AddText(ImGui::GetFont(), fs, ImVec2(x, cy - fs * 0.5f), u32(theme::color::text), online);
+    x += ow + sep;
+    dl->AddLine(ImVec2(x, cy - 7), ImVec2(x, cy + 7), u32(theme::color::border));
+    x += sep;
+    dl->AddText(ImGui::GetFont(), fs, ImVec2(x, cy - fs * 0.5f), u32(theme::color::accent_hi), env);
+    ImGui::PopFont();
+
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::TextUnformatted(kNav[st.page].subtitle);
+    ImGui::PopStyleColor();
+    ImGui::Dummy(ImVec2(0, 8));
+}
+
+// ---- Fleet ---------------------------------------------------------------
+void stat_tile(const char* label, const char* value, ImVec4 col) {
+    if (begin_card(label, 96)) {
+        // Label pinned to the top of the card.
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
+        ImGui::PushFont(theme::fonts().small);
+        ImGui::TextUnformatted(label);
+        ImGui::PopFont();
+        ImGui::PopStyleColor();
+
+        // Center the value within the empty space below the label.
+        ImGui::PushFont(theme::fonts().h1);
+        float hh = ImGui::GetTextLineHeight();
+        ImGui::PopFont();
+        float availY = ImGui::GetContentRegionAvail().y;
+        // Bias upward a little: the h1 line box has trailing descender space, so
+        // a true center reads as sitting too low.
+        if (availY > hh)
+            ImGui::Dummy(ImVec2(0, std::max(0.0f, (availY - hh) * 0.5f - 7.0f)));
+        heading(theme::fonts().h1, value, col);
+    }
+    end_card();
+}
+
+void page_fleet(AppState& st) {
+    FleetModel& f = *st.fleet;
+    const auto& devices = f.devices();
+
+    float soil_sum = 0;
+    for (const Device& d : devices) soil_sum += d.soil_moisture;
+    float soil_avg = devices.empty() ? 0 : soil_sum / devices.size();
+
+    char online[16], alerts[8], soil[8], queue[8];
+    std::snprintf(online, sizeof(online), "%d/%d", f.online_count(), (int)devices.size());
+    std::snprintf(alerts, sizeof(alerts), "%d", f.alert_count());
+    std::snprintf(soil, sizeof(soil), "%.0f%%", soil_avg * 100.0f);
+    std::snprintf(queue, sizeof(queue), "%d", f.queue_depth());
+
+    if (ImGui::BeginTable("stats", 4, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn(); stat_tile("DEVICES ONLINE", online, theme::color::ok);
+        ImGui::TableNextColumn(); stat_tile("ACTIVE ALERTS", alerts,
+            f.alert_count() ? theme::color::warn : theme::color::text_dim);
+        ImGui::TableNextColumn(); stat_tile("AVG SOIL MOISTURE", soil, theme::color::accent_hi);
+        ImGui::TableNextColumn(); stat_tile("JOB QUEUE", queue, theme::color::info);
+        ImGui::EndTable();
+    }
+
+    ImGui::Dummy(ImVec2(0, 4));
+
+    int cols = column_count(248, 4);
+    if (ImGui::BeginTable("devices", cols, ImGuiTableFlags_SizingStretchSame)) {
+        for (int i = 0; i < (int)devices.size(); ++i) {
+            ImGui::TableNextColumn();
+            const Device& d = devices[i];
+            ImGui::PushID(i);
+            if (begin_card("card")) {
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 9));
+                status_dot(status_color(d.status));
+                ImGui::SameLine();
+                ImGui::PushFont(theme::fonts().h2);
+                ImGui::TextUnformatted(d.name.c_str());
+                ImGui::PopFont();
+                ImGui::SameLine();
+                ImGui::PushFont(theme::fonts().small);
+                ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
+                                     ImGui::CalcTextSize(d.firmware.c_str()).x);
+                dim_text("%s", d.firmware.c_str());
+                dim_text("%s  -  %s", d.id.c_str(), d.location.c_str());
+                ImGui::PopFont();
+                ImGui::Dummy(ImVec2(0, 2));
+                meter_row(ICON_DROPLET, "SOIL", d.soil_moisture, theme::color::ok);
+                meter_row(ICON_SUN, "LIGHT", d.light, theme::color::warn);
+                meter_row(ICON_BATTERY, "BATTERY", d.battery,
+                          d.battery < 0.2f ? theme::color::danger : theme::color::accent);
+                ImGui::PopStyleVar();
+            }
+            end_card();
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+}
+
+// ---- Telemetry: live metrics + logs streaming to Sentry ------------------
+void series_stats(const Series& s, float& lo, float& hi, float& avg) {
+    lo = 1e9f; hi = -1e9f; float sum = 0;
+    for (float v : s.data) { lo = std::min(lo, v); hi = std::max(hi, v); sum += v; }
+    avg = sum / Series::kLen;
+}
+
+// A circular arc gauge with a centered value and a label below.
+void gauge_card(const char* label, float frac, ImVec4 col, const char* value, float height) {
+    frac = std::max(0.0f, std::min(frac, 1.0f));
+    if (begin_card(label, height)) {
+        ImVec2 region = ImGui::GetContentRegionAvail();
+        ImVec2 p = ImGui::GetCursorScreenPos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        float r = 40;
+        ImVec2 c(p.x + region.x * 0.5f, p.y + r + 6);
+        const float kPi = 3.14159265f;
+        float a0 = kPi * 0.75f, a1 = kPi * 2.25f, th = 7;
+        dl->PathArcTo(c, r, a0, a1, 64);
+        dl->PathStroke(u32(theme::color::surface_hi), 0, th);
+        if (frac > 0.001f) {
+            dl->PathArcTo(c, r, a0, a0 + (a1 - a0) * frac, 64);
+            dl->PathStroke(u32(col), 0, th);
+        }
+        ImGui::PushFont(theme::fonts().h2);
+        ImVec2 ts = ImGui::CalcTextSize(value);
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                    ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f), u32(theme::color::text), value);
+        ImGui::PopFont();
+        ImGui::PushFont(theme::fonts().small);
+        float lw = ImGui::CalcTextSize(label).x;
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                    ImVec2(c.x - lw * 0.5f, c.y + r + 12), u32(theme::color::text_dim), label);
+        ImGui::PopFont();
+    }
+    end_card();
+}
+
+void metric_table_row(const char* name, const char* value, const char* type) {
+    ImGui::TableNextColumn();
+    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
+    ImGui::TextUnformatted(name);
+    ImGui::PopStyleColor();
+    ImGui::TableNextColumn();
+    ImGui::TextUnformatted(value);
+    ImGui::TableNextColumn();
+    dim_text("%s", type);
+    ImGui::PopFont();
+}
+
+void log_feed(AppState& st) {
+    if (!st.console) return;
+    ImGui::PushFont(theme::fonts().small);
+    for (const auto& ln : st.console->lines()) {
+        ImVec4 col = theme::color::text_dim;
+        const char* tag = "info";
+        switch (ln.level) {
+            case ConsoleLog::Level::Debug: col = theme::color::text_faint; tag = "debug"; break;
+            case ConsoleLog::Level::Info:  col = theme::color::ok;         tag = "info";  break;
+            case ConsoleLog::Level::Warn:  col = theme::color::warn;       tag = "warn";  break;
+            case ConsoleLog::Level::Error: col = theme::color::danger;     tag = "error"; break;
+        }
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
+        ImGui::Text("%s", ln.time.c_str());
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, col);
+        ImGui::Text("%-5s", tag);
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
+        ImGui::Text("%-8s", ln.source.c_str());
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::TextUnformatted(ln.text.c_str());
+    }
+    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) ImGui::SetScrollHereY(1.0f);
+    ImGui::PopFont();
+}
+
+void page_telemetry(AppState& st) {
+    FleetModel& f = *st.fleet;
+    char v0[16], v1[16], v2[16], v3[16];
+    std::snprintf(v0, sizeof(v0), "%.0f", f.frame_time().latest());
+    std::snprintf(v1, sizeof(v1), "%.0f%%", f.cpu_load().latest() * 100.0f);
+    std::snprintf(v2, sizeof(v2), "%.0f", f.net_latency().latest());
+    std::snprintf(v3, sizeof(v3), "%.0f%%", f.soil_avg().latest() * 100.0f);
+
+    const float gauge_h = 150;
+    if (ImGui::BeginTable("gauges", 4, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn(); gauge_card("frame time (ms)", f.frame_time().latest() / 33.0f, theme::color::accent, v0, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("cpu load", f.cpu_load().latest(), theme::color::info, v1, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("backend latency (ms)", f.net_latency().latest() / 90.0f, theme::color::warn, v2, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("soil moisture", f.soil_avg().latest(), theme::color::ok, v3, gauge_h);
+        ImGui::EndTable();
+    }
+
+    ImGui::Dummy(ImVec2(0, 4));
+    // Subtract the feeds table's cell padding so the cards end at the content
+    // bottom (level with the sidebar operator card) instead of overshooting it.
+    float row_h = ImGui::GetContentRegionAvail().y - 18.0f;
+    if (ImGui::BeginTable("feeds", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextColumn();
+        if (begin_card("metrics", row_h)) {
+            heading(theme::fonts().h2, with_icon(ICON_CHART, "Metrics").c_str());
+            ImGui::PushFont(theme::fonts().small);
+            dim_text("emitted via sentry_metrics_* every 2s");
+            ImGui::PopFont();
+            ImGui::Dummy(ImVec2(0, 6));
+            char m0[16], m1[16], m2[16], m3[16], m4[16];
+            std::snprintf(m0, sizeof(m0), "%.1f ms", f.frame_time().latest());
+            std::snprintf(m1, sizeof(m1), "%.2f", f.cpu_load().latest());
+            std::snprintf(m2, sizeof(m2), "%.1f ms", f.net_latency().latest());
+            std::snprintf(m3, sizeof(m3), "%d", f.queue_depth());
+            std::snprintf(m4, sizeof(m4), "%d", f.online_count());
+            if (ImGui::BeginTable("mt", 3,
+                    ImGuiTableFlags_RowBg | ImGuiTableFlags_PadOuterX)) {
+                ImGui::TableSetupColumn("metric", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthFixed, 80);
+                ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 86);
+                metric_table_row("fleet.frame_time", m0, "distribution");
+                metric_table_row("fleet.cpu_load", m1, "gauge");
+                metric_table_row("fleet.backend_latency", m2, "gauge");
+                metric_table_row("fleet.job_queue_depth", m3, "gauge");
+                metric_table_row("fleet.devices_online", m4, "gauge");
+                ImGui::EndTable();
+            }
+        }
+        end_card();
+
+        ImGui::TableNextColumn();
+        if (begin_card("logs", row_h)) {
+            heading(theme::fonts().h2, with_icon(ICON_TERMINAL, "Logs").c_str());
+            ImGui::PushFont(theme::fonts().small);
+            dim_text("structured logs via sentry_log_*");
+            ImGui::PopFont();
+            ImGui::Dummy(ImVec2(0, 6));
+            ImGui::BeginChild("logscroll", ImVec2(0, 0), false);
+            log_feed(st);
+            ImGui::EndChild();
+        }
+        end_card();
+        ImGui::EndTable();
+    }
+}
+
+// ---- Pipelines -----------------------------------------------------------
+void page_pipelines(AppState&) {
+    struct Row { const char* name; const char* op; float speed; ImVec4 col; };
+    static const Row rows[] = {
+        {"Image processing", "thumbnail and classify plant photos", 0.30f, theme::color::accent},
+        {"Sensor pipeline", "ingest soil, light and temperature samples", 0.55f, theme::color::ok},
+        {"Firmware flasher", "stage OTA firmware to devices", 0.12f, theme::color::danger},
+        {"Telemetry sync", "push rollups to the backend", 0.42f, theme::color::warn},
+    };
+    float t = (float)ImGui::GetTime();
+    for (int i = 0; i < IM_ARRAYSIZE(rows); ++i) {
+        const Row& r = rows[i];
+        ImGui::PushID(i);
+        if (begin_card("p")) {
+            ImGui::PushFont(theme::fonts().h2);
+            ImGui::TextUnformatted(r.name);
+            ImGui::PopFont();
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 64);
+            chip("running", r.col);
+            ImGui::PushFont(theme::fonts().small);
+            dim_text("%s", r.op);
+            ImGui::PopFont();
+            ImGui::Dummy(ImVec2(0, 4));
+            float prog = 0.5f + 0.5f * std::sin(t * r.speed + i);
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, r.col);
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::color::surface_hi);
+            ImGui::ProgressBar(prog, ImVec2(-FLT_MIN, 8), "");
+            ImGui::PopStyleColor(2);
+        }
+        end_card();
+        ImGui::PopID();
+        ImGui::Dummy(ImVec2(0, 2));
+    }
+}
+
+// ---- Chaos Lab -----------------------------------------------------------
+ImVec4 severity_color(Severity s) {
+    switch (s) {
+        case Severity::Crash: return theme::color::danger;
+        case Severity::Warning: return theme::color::warn;
+        case Severity::Backend: return theme::color::info;
+        case Severity::Message: return theme::color::ok;
+    }
+    return theme::color::accent;
+}
+
+void page_chaos(AppState& st) {
+    const auto& actions = scenarios();
+    int cols = column_count(258, 4);
+    if (ImGui::BeginTable("chaos", cols, ImGuiTableFlags_SizingStretchSame)) {
+        for (int i = 0; i < (int)actions.size(); ++i) {
+            ImGui::TableNextColumn();
+            const ChaosScenario& a = actions[i];
+            ImVec4 col = severity_color(a.severity);
+            ImGui::PushID(a.id);
+            if (begin_card("c", 150)) {
+                heading(theme::fonts().h2, a.label, col);
+                ImGui::Dummy(ImVec2(0, 1));
+                ImGui::PushFont(theme::fonts().small);
+                ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+                ImGui::PushTextWrapPos(0.0f);
+                ImGui::TextUnformatted(a.desc);
+                ImGui::PopTextWrapPos();
+                ImGui::PopStyleColor();
+                ImGui::PopFont();
+
+                float bh = ImGui::GetFrameHeight() + 4;
+                ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - 16);
+                ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
+                ImGui::PushStyleColor(ImGuiCol_Text, col);
+                ImGui::PushFont(theme::fonts().h2);
+                if (ImGui::Button(with_icon(ICON_BOLT, "Trigger fault").c_str(),
+                                  ImVec2(-FLT_MIN, bh)) && st.on_chaos)
+                    st.on_chaos(a.id);
+                ImGui::PopFont();
+                ImGui::PopStyleColor(4);
+            }
+            end_card();
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+}
+
+// ---- Settings ------------------------------------------------------------
+void kv_row(const char* k, const char* v) {
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::TextUnformatted(k);
+    ImGui::PopStyleColor();
+    ImGui::SameLine(190);
+    ImGui::TextUnformatted(v);
+}
+
+void section(const char* title) {
+    heading(theme::fonts().h2, title);
+    ImGui::Dummy(ImVec2(0, 6));
+}
+
+void feature_row(const char* label) {
+    ImGui::PushFont(theme::fonts().body);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::ok);
+    ImGui::TextUnformatted(theme::has_icons() ? ICON_CHECK : "+");
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+    ImGui::SameLine(0, 12);
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine();
+    float rx = ImGui::GetContentRegionMax().x - ImGui::CalcTextSize("enabled").x;
+    ImGui::SetCursorPosX(rx);
+    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::ok);
+    ImGui::TextUnformatted("enabled");
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+}
+
+void page_settings(AppState& st) {
+    if (ImGui::BeginTable("set", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextColumn();
+        if (begin_card("left")) {
+            section("Sentry SDK");
+            kv_row("SDK", "sentry.native 0.15.2");
+            kv_row("Crash backend", "native (out-of-process)");
+            kv_row("Minidump mode", "smart + client stackwalk");
+            kv_row("Upload mode", "async");
+            ImGui::Dummy(ImVec2(0, 16));
+            section("Connection");
+            kv_row("Environment", st.environment.c_str());
+            kv_row("Release", st.release.c_str());
+            kv_row("Ingest host", st.dsn_configured ? st.dsn_host.c_str() : "(SENTRY_DSN not set)");
+            kv_row("Backend", "flask.empower-plant.com");
+        }
+        end_card();
+
+        ImGui::TableNextColumn();
+        if (begin_card("right")) {
+            section("Enabled features");
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12, 11));
+            const char* feats[] = {
+                "Performance tracing", "Distributed tracing", "Structured logs",
+                "Metrics", "Sessions / release health", "App-hang detection",
+                "Screenshots", "External crash reporter"};
+            for (const char* fe : feats) feature_row(fe);
+            ImGui::PopStyleVar();
+        }
+        end_card();
+        ImGui::EndTable();
+    }
+}
+
+} // namespace
+
+void render_ui(AppState& st) {
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->WorkPos);
+    ImGui::SetNextWindowSize(vp->WorkSize);
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                             ImGuiWindowFlags_NoNavFocus;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::Begin("##root", nullptr, flags);
+    ImGui::PopStyleVar();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22, 28));
+    ImGui::BeginChild("sidebar_wrap", ImVec2(252, 0), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    render_sidebar(st);
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+
+    ImGui::SameLine(0, 16);
+
+    // The content column spans the full window height (its bottom lines up with
+    // the sidebar's operator card). Pages taller than that scroll inside here
+    // rather than spilling past the bottom edge.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(34, 28));
+    ImGui::BeginChild("content", ImVec2(0, 0), false);
+    render_header(st);
+    switch (st.page) {
+        case 0: page_fleet(st); break;
+        case 1: page_telemetry(st); break;
+        case 2: page_pipelines(st); break;
+        case 3: page_chaos(st); break;
+        case 4: page_settings(st); break;
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+
+    ImGui::End();
+}
+
+} // namespace empower
