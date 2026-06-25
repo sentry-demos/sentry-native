@@ -35,6 +35,9 @@ struct SentryConfig {
     // Block the crashing process until the daemon finishes uploading the crash.
     // Needed for one-shot runs (CI) where nothing relaunches to flush it.
     bool crash_upload_sync = false;
+    // Hand crashes to the external crash reporter UI (interactive desktop app).
+    // Headless/CI must leave this false so the SDK submits crashes itself.
+    bool use_external_crash_reporter = false;
 };
 
 class SentryManager {

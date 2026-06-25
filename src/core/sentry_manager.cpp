@@ -214,11 +214,17 @@ bool SentryManager::init(const SentryConfig& config) {
 #endif
 
     // --- External crash reporter (official sentry-desktop-crash-reporter) --
-    std::string reporter = !config.crash_reporter_path.empty()
-        ? config.crash_reporter_path
-        : find_crash_reporter();
-    if (!reporter.empty()) {
-        sentry_options_set_external_crash_reporter_path(options, reporter.c_str());
+    // Only for the interactive GUI: when set, the SDK hands the crash to this
+    // separate app to submit (with a user-feedback dialog). A headless/CI binary
+    // can't launch that GUI app, so it must submit crashes itself - otherwise
+    // the crash is written out for the reporter and never sent.
+    if (config.use_external_crash_reporter) {
+        std::string reporter = !config.crash_reporter_path.empty()
+            ? config.crash_reporter_path
+            : find_crash_reporter();
+        if (!reporter.empty()) {
+            sentry_options_set_external_crash_reporter_path(options, reporter.c_str());
+        }
     }
 
     sentry_options_set_before_send(options, before_send, nullptr);
