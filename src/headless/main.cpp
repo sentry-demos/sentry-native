@@ -98,9 +98,9 @@ int main(int argc, char** argv) {
     cfg.environment = env_or("SENTRY_ENVIRONMENT", "ci");
     cfg.component = "headless";
     cfg.crash_upload_sync = true; // one-shot run: upload the crash before exit
-    // Headroom over normal pacing (incl. a slow backend call) so only the
-    // deliberate 8s app-hang scenario trips the watchdog, not the autopilot.
-    cfg.app_hang_timeout_ms = 4000;
+    // Headroom over normal pacing (the backend call is bounded to 3s) so only
+    // the deliberate 8s app-hang scenario trips the watchdog, not the autopilot.
+    cfg.app_hang_timeout_ms = 6000;
     cfg.debug = env_or("EMPOWER_DEBUG", "")[0] != '\0';
     if (!empower::SentryManager::init(cfg)) {
         std::fprintf(stderr, "headless: sentry init failed (continuing)\n");
