@@ -35,6 +35,9 @@ jobs:
         with:
           workflow: ci.yml
           workflow_conclusion: success
+          # Use the build from the same branch this workflow runs on, so a
+          # manual dispatch on a feature branch tests that branch's binary.
+          branch: ${{ github.ref_name }}
           name: empower-native-${{ matrix.name }}
           path: artifact
 
