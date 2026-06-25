@@ -178,13 +178,23 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_handler_path(options, handler.c_str());
 
     // --- New out-of-process "native" crash backend -------------------------
-    // Selected at build time via -DSENTRY_BACKEND=native. These knobs are
-    // specific to that backend: capture a client-side stackwalk AND a smart
-    // minidump, and let the daemon finish the upload after the app exits.
+    // Selected at build time via -DSENTRY_BACKEND=native: a client-side native
+    // stackwalk plus a smart minidump, with the daemon finishing the upload.
     sentry_options_set_crash_reporting_mode(
         options, SENTRY_CRASH_REPORTING_MODE_NATIVE_WITH_MINIDUMP);
     sentry_options_set_minidump_mode(options, SENTRY_MINIDUMP_MODE_SMART);
-    sentry_options_set_crash_upload_mode(options, SENTRY_CRASH_UPLOAD_MODE_ASYNC);
+    sentry_options_set_crash_upload_mode(options,
+        config.crash_upload_sync ? SENTRY_CRASH_UPLOAD_MODE_SYNC
+                                 : SENTRY_CRASH_UPLOAD_MODE_ASYNC);
+    if (config.crash_upload_sync) {
+        // SYNC keeps the crashed process alive until the daemon is done, but the
+        // daemon only gets `shutdown_timeout` to flush. The default (2s) is too
+        // short for our ~1MB crash envelope (minidump + screenshot), so it would
+        // be dumped to disk for "next restart" - which never happens in a
+        // one-shot CI run. Give it enough time to finish the upload in-process
+        // (kept under the ~10s crash-handler wait cap).
+        sentry_options_set_shutdown_timeout(options, 8000);
+    }
 
     // --- Performance, logs, metrics, sessions ------------------------------
     sentry_options_set_traces_sample_rate(options, config.traces_sample_rate);
@@ -204,11 +214,17 @@ bool SentryManager::init(const SentryConfig& config) {
 #endif
 
     // --- External crash reporter (official sentry-desktop-crash-reporter) --
-    std::string reporter = !config.crash_reporter_path.empty()
-        ? config.crash_reporter_path
-        : find_crash_reporter();
-    if (!reporter.empty()) {
-        sentry_options_set_external_crash_reporter_path(options, reporter.c_str());
+    // Only for the interactive GUI: when set, the SDK hands the crash to this
+    // separate app to submit (with a user-feedback dialog). A headless/CI binary
+    // can't launch that GUI app, so it must submit crashes itself - otherwise
+    // the crash is written out for the reporter and never sent.
+    if (config.use_external_crash_reporter) {
+        std::string reporter = !config.crash_reporter_path.empty()
+            ? config.crash_reporter_path
+            : find_crash_reporter();
+        if (!reporter.empty()) {
+            sentry_options_set_external_crash_reporter_path(options, reporter.c_str());
+        }
     }
 
     sentry_options_set_before_send(options, before_send, nullptr);

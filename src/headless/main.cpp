@@ -36,6 +36,18 @@ void sleep_ms(int ms) {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
+// Waits while keeping the app-hang watchdog fed, so the autopilot's own pacing
+// is never mistaken for a hang (only the deliberate app-hang scenario blocks
+// without a heartbeat).
+void idle(int ms) {
+    const int step = 150;
+    for (int elapsed = 0; elapsed < ms; elapsed += step) {
+        empower::SentryManager::app_hang_heartbeat();
+        sleep_ms(ms - elapsed < step ? ms - elapsed : step);
+    }
+    empower::SentryManager::app_hang_heartbeat();
+}
+
 // One simulated pipeline run as a performance transaction with child spans,
 // plus a metric and a structured log - the steady-state demo data.
 void run_pipeline(const char* name, const char* op) {
@@ -85,6 +97,10 @@ int main(int argc, char** argv) {
     empower::SentryConfig cfg;
     cfg.environment = env_or("SENTRY_ENVIRONMENT", "ci");
     cfg.component = "headless";
+    cfg.crash_upload_sync = true; // one-shot run: upload the crash before exit
+    // Headroom over normal pacing (the backend call is bounded to 3s) so only
+    // the deliberate 8s app-hang scenario trips the watchdog, not the autopilot.
+    cfg.app_hang_timeout_ms = 6000;
     cfg.debug = env_or("EMPOWER_DEBUG", "")[0] != '\0';
     if (!empower::SentryManager::init(cfg)) {
         std::fprintf(stderr, "headless: sentry init failed (continuing)\n");
@@ -139,10 +155,17 @@ int main(int argc, char** argv) {
         bool fired_hang = false;
         int iter = 0;
         while (std::chrono::steady_clock::now() < end) {
+            empower::SentryManager::app_hang_heartbeat();
             run_pipeline("sensor.pipeline", "device.ingest");
             empower::SentryManager::app_hang_heartbeat();
-            if (iter % 3 == 0) empower::checkout("", &console);     // distributed trace (no error event)
-            if (iter % 4 == 0) run_pipeline("image.processing", "image.classify");
+            if (iter % 3 == 0) {
+                empower::checkout("", &console);                    // distributed trace (no error event)
+                empower::SentryManager::app_hang_heartbeat();
+            }
+            if (iter % 4 == 0) {
+                run_pipeline("image.processing", "image.classify");
+                empower::SentryManager::app_hang_heartbeat();
+            }
             sentry_value_t online_attrs = sentry_value_new_object();
             sentry_value_set_by_key(online_attrs, "fleet_size",
                 sentry_value_new_attribute(
@@ -166,7 +189,7 @@ int main(int argc, char** argv) {
                 fired_hang = true;
             }
             ++iter;
-            sleep_ms(1500);
+            idle(1500);
         }
         if (final_crash) {
             // Event 3: the deterministic headline crash, so every CI run yields

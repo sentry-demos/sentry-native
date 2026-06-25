@@ -131,6 +131,7 @@ int main(int argc, char** argv) {
     cfg.environment = env_or("SENTRY_ENVIRONMENT", "production");
     cfg.component = "fleet";
     cfg.debug = env_or("EMPOWER_DEBUG", "")[0] != '\0';
+    cfg.use_external_crash_reporter = true; // interactive desktop app
     bool sentry_ok = empower::SentryManager::init(cfg);
 
     // Real GPU context from the live OpenGL renderer, so even non-GPU crashes

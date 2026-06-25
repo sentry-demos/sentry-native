@@ -49,7 +49,10 @@ bool perform_post(const std::string& url, const char* body,
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hdrs);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+    // Keep the call well under the app-hang threshold so a slow backend can't
+    // be mistaken for a UI hang (this runs on the main thread).
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 3L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 3L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "empower-fleet/1.0");
     if (curl_easy_perform(curl) == CURLE_OK) {
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.status);
@@ -82,6 +85,8 @@ bool perform_post(const std::string& url, const char* body,
     HINTERNET session = WinHttpOpen(L"empower-fleet/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return true;
+    // Bound the call below the app-hang threshold (runs on the main thread).
+    WinHttpSetTimeouts(session, 3000, 3000, 3000, 3000);
     HINTERNET conn = WinHttpConnect(session, host, uc.nPort, 0);
     HINTERNET req = conn
         ? WinHttpOpenRequest(conn, L"POST", path, nullptr, WINHTTP_NO_REFERER,
