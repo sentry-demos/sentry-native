@@ -192,10 +192,12 @@ int main(int argc, char** argv) {
             idle(1500);
         }
         if (final_crash) {
-            // Event 3: the deterministic headline crash, so every CI run yields
-            // the same Seer-friendly cross-thread/cross-subsystem crash.
-            std::fprintf(stderr, "autopilot: event 3 - final crash 'convoluted'\n");
-            empower::trigger("convoluted", &console); // crashes -> non-zero exit for CI
+            // Event 3: a clean, deterministic crash (null dereference -> SIGSEGV
+            // at 0x0). It symbolicates normally and surfaces as an obvious crash
+            // issue. The richer "Convoluted Chain" crash stays in the Chaos Lab
+            // for manual / GUI use (its garbage jump address confuses grouping).
+            std::fprintf(stderr, "autopilot: event 3 - final crash 'null-deref'\n");
+            empower::trigger("null-deref", &console); // crashes -> non-zero exit for CI
         }
     } else if (listen_port > 0) {
         std::fprintf(stderr, "idle: waiting for remote commands (Ctrl-C to exit)\n");
