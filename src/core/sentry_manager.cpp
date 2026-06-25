@@ -186,6 +186,15 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_crash_upload_mode(options,
         config.crash_upload_sync ? SENTRY_CRASH_UPLOAD_MODE_SYNC
                                  : SENTRY_CRASH_UPLOAD_MODE_ASYNC);
+    if (config.crash_upload_sync) {
+        // SYNC keeps the crashed process alive until the daemon is done, but the
+        // daemon only gets `shutdown_timeout` to flush. The default (2s) is too
+        // short for our ~1MB crash envelope (minidump + screenshot), so it would
+        // be dumped to disk for "next restart" - which never happens in a
+        // one-shot CI run. Give it enough time to finish the upload in-process
+        // (kept under the ~10s crash-handler wait cap).
+        sentry_options_set_shutdown_timeout(options, 8000);
+    }
 
     // --- Performance, logs, metrics, sessions ------------------------------
     sentry_options_set_traces_sample_rate(options, config.traces_sample_rate);
