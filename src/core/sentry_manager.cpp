@@ -184,7 +184,9 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_crash_reporting_mode(
         options, SENTRY_CRASH_REPORTING_MODE_NATIVE_WITH_MINIDUMP);
     sentry_options_set_minidump_mode(options, SENTRY_MINIDUMP_MODE_SMART);
-    sentry_options_set_crash_upload_mode(options, SENTRY_CRASH_UPLOAD_MODE_ASYNC);
+    sentry_options_set_crash_upload_mode(options,
+        config.crash_upload_sync ? SENTRY_CRASH_UPLOAD_MODE_SYNC
+                                 : SENTRY_CRASH_UPLOAD_MODE_ASYNC);
 
     // --- Performance, logs, metrics, sessions ------------------------------
     sentry_options_set_traces_sample_rate(options, config.traces_sample_rate);

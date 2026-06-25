@@ -32,6 +32,9 @@ struct SentryConfig {
     double traces_sample_rate = 1.0;
     // App-hang/ANR threshold in milliseconds (kept short for a snappy demo).
     int app_hang_timeout_ms = 2000;
+    // Block the crashing process until the daemon finishes uploading the crash.
+    // Needed for one-shot runs (CI) where nothing relaunches to flush it.
+    bool crash_upload_sync = false;
 };
 
 class SentryManager {
