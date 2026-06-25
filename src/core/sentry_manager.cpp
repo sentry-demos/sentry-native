@@ -178,9 +178,8 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_handler_path(options, handler.c_str());
 
     // --- New out-of-process "native" crash backend -------------------------
-    // Selected at build time via -DSENTRY_BACKEND=native. These knobs are
-    // specific to that backend: capture a client-side stackwalk AND a smart
-    // minidump, and let the daemon finish the upload after the app exits.
+    // Selected at build time via -DSENTRY_BACKEND=native: a client-side native
+    // stackwalk plus a smart minidump, with the daemon finishing the upload.
     sentry_options_set_crash_reporting_mode(
         options, SENTRY_CRASH_REPORTING_MODE_NATIVE_WITH_MINIDUMP);
     sentry_options_set_minidump_mode(options, SENTRY_MINIDUMP_MODE_SMART);
