@@ -43,8 +43,6 @@ jobs:
 
       - name: Run the autopilot (expects a crash)
         shell: bash
-        env:
-          EMPOWER_DEBUG: "1"
         run: |
           chmod +x "artifact/${{ matrix.bin }}" "artifact/sentry-crash" 2>/dev/null || true
           set +e
