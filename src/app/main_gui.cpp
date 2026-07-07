@@ -180,10 +180,10 @@ int main(int argc, char** argv) {
         rcfg.replays_dir = cfg.database_path + "/replays";
         rcfg.replay_id = replay_id;
         // Quality knobs, overridable for experiments (see README).
-        rcfg.max_width = std::atoi(env_or("EMPOWER_REPLAY_MAX_WIDTH", "1280"));
-        rcfg.qp = std::atoi(env_or("EMPOWER_REPLAY_QP", "23"));
+        rcfg.max_width = std::atoi(env_or("EMPOWER_REPLAY_MAX_WIDTH", "1920"));
+        rcfg.qp = std::atoi(env_or("EMPOWER_REPLAY_QP", "12"));
         rcfg.capture_fps =
-            static_cast<float>(std::atof(env_or("EMPOWER_REPLAY_FPS", "4")));
+            static_cast<float>(std::atof(env_or("EMPOWER_REPLAY_FPS", "8")));
         rcfg.window_seconds = static_cast<float>(
             std::atof(env_or("EMPOWER_REPLAY_WINDOW_SEC", "15")));
         if (replay.init(rcfg)) {
