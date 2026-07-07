@@ -70,6 +70,7 @@ The build produces three binaries (each with the `sentry-crash` daemon copied ne
 | **App-hang / ANR** | App-hang watchdog with a UI-thread heartbeat |
 | **Attachments** | Calibration blobs and a **live UI screenshot** attached to events on every platform |
 | **Screenshots** | SDK screenshot capture on Windows; offscreen-rendered UI PNG attachment elsewhere |
+| **Session replay** | Rolling ~15 s H.264 clip of the dashboard, staged via sentry-native's embedder replay protocol and sent by the crash daemon **in the same session** as the crash |
 | **External crash reporter** | Auto-wires the official [sentry-desktop-crash-reporter](https://github.com/getsentry/sentry-desktop-crash-reporter), themed for Empower Plant |
 | **User feedback** | Collected through the external crash reporter |
 
@@ -87,6 +88,10 @@ The build produces three binaries (each with the `sentry-crash` daemon copied ne
 | `EMPOWER_BACKEND_URL` | `https://flask.empower-plant.com` | Backend used for distributed tracing |
 | `EMPOWER_CRASH_REPORTER` | auto-detected next to the binary | Path to the external crash reporter |
 | `EMPOWER_DEBUG` | unset | Set to enable verbose SDK logging |
+| `EMPOWER_REPLAY_MAX_WIDTH` | `1280` | Session-replay clip width (frames are downscaled to fit; higher = sharper, more RAM) |
+| `EMPOWER_REPLAY_QP` | `23` | H.264 quantizer for the replay clip (10 = near lossless … 51 = worst) |
+| `EMPOWER_REPLAY_FPS` | `4` | Replay capture rate |
+| `EMPOWER_REPLAY_WINDOW_SEC` | `15` | Rolling replay window length |
 
 ## Headless & remote control
 
@@ -133,6 +138,8 @@ This demo is built on the following open-source components, all fetched at build
 | [Dear ImGui](https://github.com/ocornut/imgui) | Immediate-mode GUI | MIT |
 | [GLFW](https://github.com/glfw/glfw) | Window + OpenGL context | Zlib |
 | [stb_image_write](https://github.com/nothings/stb) | PNG screenshot encoding | Public Domain / MIT |
+| [minih264](https://github.com/lieff/minih264) | H.264 encoding for the session-replay clip | CC0 / Public Domain |
+| [minimp4](https://github.com/lieff/minimp4) | mp4 muxing for the session-replay clip | CC0 / Public Domain |
 | [libcurl](https://curl.se/libcurl/) | HTTP for distributed-trace backend calls | curl (MIT-style) |
 | [Rubik](https://github.com/googlefonts/rubik) | UI typeface | SIL Open Font License 1.1 |
 | [Font Awesome 6 Free](https://github.com/FortAwesome/Font-Awesome) | UI icons | SIL OFL 1.1 (fonts) · CC BY 4.0 (icons) · MIT (code) |

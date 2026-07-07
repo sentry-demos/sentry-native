@@ -44,7 +44,8 @@ message(STATUS "Empower release: ${EMPOWER_RELEASE}")
 # ---------------------------------------------------------------------------
 option(EMPOWER_BUILD_GUI "Build the ImGui Fleet Control Center GUI" ON)
 option(EMPOWER_BUILD_SMOKE "Build the connectivity smoke-test binary" ON)
-set(EMPOWER_SENTRY_NATIVE_VERSION "0.15.2" CACHE STRING "sentry-native release tag to fetch")
+# 0.15.3+: the native crash daemon uploads embedder-staged session replays.
+set(EMPOWER_SENTRY_NATIVE_VERSION "0.15.3" CACHE STRING "sentry-native release tag to fetch")
 
 include(FetchContent)
 
@@ -227,6 +228,25 @@ if(EMPOWER_BUILD_GUI)
         endif()
     endif()
 
+    # minih264e + minimp4 (public domain, single-header) for the rolling
+    # session-replay clip: H.264 encode + mp4 mux, stb-style vendoring.
+    foreach(_hdr minih264e.h minimp4.h)
+        if(NOT EXISTS ${_empower_gendir}/${_hdr})
+            if(_hdr STREQUAL "minih264e.h")
+                set(_hdr_url https://raw.githubusercontent.com/lieff/minih264/master/minih264e.h)
+            else()
+                set(_hdr_url https://raw.githubusercontent.com/lieff/minimp4/master/minimp4.h)
+            endif()
+            file(DOWNLOAD ${_hdr_url} ${_empower_gendir}/${_hdr}
+                INACTIVITY_TIMEOUT 20 STATUS _hdr_status)
+            list(GET _hdr_status 0 _hdr_rc)
+            if(NOT _hdr_rc EQUAL 0)
+                message(STATUS "${_hdr} unavailable; session replay disabled")
+                file(REMOVE ${_empower_gendir}/${_hdr})
+            endif()
+        endif()
+    endforeach()
+
     add_executable(empower-fleet
         src/app/main_gui.cpp
         src/app/theme.cpp
@@ -236,6 +256,17 @@ if(EMPOWER_BUILD_GUI)
     if(EXISTS ${_empower_gendir}/stb_image_write.h)
         target_include_directories(empower-fleet PRIVATE ${_empower_gendir})
         target_compile_definitions(empower-fleet PRIVATE EMPOWER_HAVE_STB=1)
+    endif()
+    if(EXISTS ${_empower_gendir}/minih264e.h AND EXISTS ${_empower_gendir}/minimp4.h)
+        target_sources(empower-fleet PRIVATE
+            src/app/replay_recorder.cpp
+            src/app/replay_encode.c
+            src/app/replay_mux.c)
+        target_include_directories(empower-fleet PRIVATE ${_empower_gendir})
+        target_compile_definitions(empower-fleet PRIVATE EMPOWER_HAVE_REPLAY=1)
+        # The vendored encoder is warning-noisy; keep our build output clean.
+        set_source_files_properties(src/app/replay_encode.c src/app/replay_mux.c
+            PROPERTIES COMPILE_OPTIONS "$<IF:$<C_COMPILER_ID:MSVC>,/w,-w>")
     endif()
     empower_bundle_daemon(empower-fleet)
     empower_codesign(empower-fleet)

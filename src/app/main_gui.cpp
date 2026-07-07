@@ -25,6 +25,11 @@
 #include "chaos/chaos.h"
 #include "core/sentry_manager.h"
 
+#if defined(EMPOWER_HAVE_REPLAY)
+#  include <chrono>
+#  include "app/replay_recorder.h"
+#endif
+
 #include <sentry.h>
 
 namespace {
@@ -131,7 +136,7 @@ int main(int argc, char** argv) {
     cfg.environment = env_or("SENTRY_ENVIRONMENT", "production");
     cfg.component = "fleet";
     cfg.debug = env_or("EMPOWER_DEBUG", "")[0] != '\0';
-    cfg.use_external_crash_reporter = true; // interactive desktop app
+    cfg.use_external_crash_reporter = false; // daemon submits crashes directly
     bool sentry_ok = empower::SentryManager::init(cfg);
 
     // Real GPU context from the live OpenGL renderer, so even non-GPU crashes
@@ -157,6 +162,40 @@ int main(int argc, char** argv) {
     if (sentry_ok) sentry_attach_file(screenshot_path.c_str());
 #endif
 
+#if defined(EMPOWER_HAVE_REPLAY)
+    // Rolling session replay: keep re-staging the last ~15s of the dashboard
+    // as an mp4 in <database>/replays/. On a crash the sentry-crash daemon
+    // wraps the staged clip in a replay_video envelope (matched to the crash
+    // event via contexts.replay.replay_id) and sends it in the same session.
+    empower::ReplayRecorder replay;
+    if (sentry_ok) {
+        sentry_uuid_t replay_uuid = sentry_uuid_new_v4();
+        char uuid_str[37];
+        sentry_uuid_as_string(&replay_uuid, uuid_str);
+        std::string replay_id;
+        for (const char* c = uuid_str; *c; ++c) {
+            if (*c != '-') replay_id += *c;
+        }
+        empower::ReplayRecorder::Config rcfg;
+        rcfg.replays_dir = cfg.database_path + "/replays";
+        rcfg.replay_id = replay_id;
+        // Quality knobs, overridable for experiments (see README).
+        rcfg.max_width = std::atoi(env_or("EMPOWER_REPLAY_MAX_WIDTH", "1280"));
+        rcfg.qp = std::atoi(env_or("EMPOWER_REPLAY_QP", "23"));
+        rcfg.capture_fps =
+            static_cast<float>(std::atof(env_or("EMPOWER_REPLAY_FPS", "4")));
+        rcfg.window_seconds = static_cast<float>(
+            std::atof(env_or("EMPOWER_REPLAY_WINDOW_SEC", "15")));
+        if (replay.init(rcfg)) {
+            sentry_value_t replay_ctx = sentry_value_new_object();
+            sentry_value_set_by_key(replay_ctx, "replay_id",
+                                    sentry_value_new_string(replay_id.c_str()));
+            sentry_set_context("replay", replay_ctx);
+        }
+    }
+    std::vector<unsigned char> replay_px;
+#endif
+
     empower::FleetModel fleet;
     fleet.init();
     empower::ConsoleLog console;
@@ -167,6 +206,12 @@ int main(int argc, char** argv) {
                  "sentry",
                  sentry_ok ? "Sentry native backend initialized"
                            : "Sentry init failed (events will not be sent)");
+#if defined(EMPOWER_HAVE_REPLAY)
+    if (replay.active()) {
+        console.push(empower::ConsoleLog::Level::Info, "replay",
+                     "session replay armed (15s rolling window)");
+    }
+#endif
     // Seed the Telemetry feed with representative recent activity.
     console.push(empower::ConsoleLog::Level::Info, "session", "session started");
     console.push(empower::ConsoleLog::Level::Info, "metric", "sent fleet.devices_online = 11");
@@ -255,6 +300,25 @@ int main(int argc, char** argv) {
         // Refresh the attached UI screenshot a couple of times a second.
         if (sentry_ok && !shot_mode && frame % 120 == 30) {
             save_screenshot(window, screenshot_path);
+        }
+#endif
+
+#if defined(EMPOWER_HAVE_REPLAY)
+        // Feed the rolling replay a few frames per second (frame-count paced
+        // in shot mode, where offscreen rendering outruns the wall clock).
+        if (replay.active()) {
+            const double now_unix
+                = std::chrono::duration<double>(
+                      std::chrono::system_clock::now().time_since_epoch())
+                      .count();
+            if (shot_mode ? frame % 30 == 0 : replay.frame_due(now_unix)) {
+                glfwGetFramebufferSize(window, &w, &h);
+                replay_px.resize(static_cast<size_t>(w) * h * 4);
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE,
+                             replay_px.data());
+                replay.submit_frame(replay_px.data(), w, h, now_unix);
+            }
         }
 #endif
         glfwSwapBuffers(window);
