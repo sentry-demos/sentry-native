@@ -72,6 +72,7 @@ The build produces three binaries (each with the `sentry-crash` daemon copied ne
 | **Screenshots** | SDK screenshot capture on Windows; offscreen-rendered UI PNG attachment elsewhere |
 | **External crash reporter** | Auto-wires the official [sentry-desktop-crash-reporter](https://github.com/getsentry/sentry-desktop-crash-reporter), themed for Empower Plant |
 | **User feedback** | Collected through the external crash reporter |
+| **Offline caching** | `SENTRY_CACHE_KEEP_ALWAYS` + Settings **Go Offline** toggle; soft events queue under `.sentry-native/cache/` and drain when back online |
 
 | Telemetry | Chaos Lab |
 | --- | --- |

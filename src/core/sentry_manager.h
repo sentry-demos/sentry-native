@@ -54,6 +54,12 @@ public:
     // Call once per frame from the UI loop.
     static void app_hang_heartbeat();
 
+    // Demo "Go Offline": block uploads and queue envelopes in the local cache.
+    // Toggle back to drain via HTTP retry. Owned here so callers don't need to
+    // know about user-consent internals.
+    static void set_offline(bool offline);
+    static bool is_offline();
+
     // The release string actually used (resolved from config/env/built-in).
     static const std::string& release();
 
@@ -61,6 +67,7 @@ public:
 
 private:
     static bool s_initialized;
+    static bool s_offline;
     static std::string s_release;
 };
 

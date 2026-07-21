@@ -5,6 +5,7 @@
 #include "app/icons.h"
 #include "app/theme.h"
 #include "chaos/chaos.h"
+#include "core/sentry_manager.h"
 
 #include "imgui.h"
 
@@ -668,12 +669,57 @@ void page_settings(AppState& st) {
             kv_row("Crash backend", "native (out-of-process)");
             kv_row("Minidump mode", "smart + client stackwalk");
             kv_row("Upload mode", "async");
+            kv_row("Cache keep", "always");
+            kv_row("HTTP retry", "enabled");
             ImGui::Dummy(ImVec2(0, 16));
             section("Connection");
             kv_row("Environment", st.environment.c_str());
             kv_row("Release", st.release.c_str());
             kv_row("Ingest host", st.dsn_configured ? st.dsn_host.c_str() : "(SENTRY_DSN not set)");
             kv_row("Backend", "flask.empower-plant.com");
+            ImGui::Dummy(ImVec2(0, 16));
+
+            // Demo control: simulate network loss so Chaos Lab events queue
+            // locally under .sentry-native/cache/, then drain on toggle-off.
+            section("Offline caching");
+            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(
+                "Simulate network loss. Chaos Lab events and crashes queue on "
+                "disk, then flush to Sentry when you go back online.");
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+            ImGui::PopFont();
+            ImGui::Dummy(ImVec2(0, 10));
+
+            const bool offline = SentryManager::is_offline();
+            ImVec4 status_col = offline ? theme::color::warn : theme::color::ok;
+            status_dot(status_col);
+            ImGui::SameLine(0, 8);
+            chip(offline ? "OFFLINE — caching" : "ONLINE — uploading", status_col);
+            ImGui::Dummy(ImVec2(0, 10));
+
+            ImVec4 btn = offline ? theme::color::ok : theme::color::warn;
+            const char* label = offline ? "Go Online" : "Go Offline";
+            ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(btn, 0.18f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(btn, 0.32f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, btn);
+            ImGui::PushStyleColor(ImGuiCol_Text, btn);
+            ImGui::PushFont(theme::fonts().h2);
+            if (ImGui::Button(with_icon(offline ? ICON_CHECK : ICON_BOLT, label).c_str(),
+                              ImVec2(-FLT_MIN, ImGui::GetFrameHeight() + 8))) {
+                const bool next = !offline;
+                SentryManager::set_offline(next);
+                if (st.console) {
+                    st.console->push(
+                        next ? ConsoleLog::Level::Warn : ConsoleLog::Level::Info, "sentry",
+                        next ? "Go Offline: uploads paused — caching envelopes locally"
+                             : "Go Online: draining cached envelopes to Sentry");
+                }
+            }
+            ImGui::PopFont();
+            ImGui::PopStyleColor(4);
         }
         end_card();
 
@@ -684,7 +730,8 @@ void page_settings(AppState& st) {
             const char* feats[] = {
                 "Performance tracing", "Distributed tracing", "Structured logs",
                 "Metrics", "Sessions / release health", "App-hang detection",
-                "Screenshots", "External crash reporter"};
+                "Screenshots", "External crash reporter",
+                "Offline cache keep", "HTTP retry / drain"};
             for (const char* fe : feats) feature_row(fe);
             ImGui::PopStyleVar();
         }

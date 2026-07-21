@@ -27,6 +27,7 @@
 namespace empower {
 
 bool SentryManager::s_initialized = false;
+bool SentryManager::s_offline = false;
 std::string SentryManager::s_release;
 
 namespace {
@@ -213,6 +214,17 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_attach_screenshot(options, 1);
 #endif
 
+    // --- Offline cache / retry ---------------------------------------------
+    // Fixed demo defaults (not SentryConfig knobs): keep envelopes on disk,
+    // retry failed/blocked sends, and gate uploads via user consent so
+    // set_offline() can simulate network loss without re-init.
+    sentry_options_set_cache_keep(options, SENTRY_CACHE_KEEP_ALWAYS);
+    sentry_options_set_cache_max_items(options, 30);
+    sentry_options_set_cache_max_size(options, 16 * 1024 * 1024); // 16 MiB
+    sentry_options_set_cache_max_age(options, 5 * 24 * 60 * 60);  // 5 days
+    sentry_options_set_http_retry(options, 1);
+    sentry_options_set_require_user_consent(options, 1);
+
     // --- External crash reporter (official sentry-desktop-crash-reporter) --
     // Only for the interactive GUI: when set, the SDK hands the crash to this
     // separate app to submit (with a user-feedback dialog). A headless/CI binary
@@ -234,6 +246,11 @@ bool SentryManager::init(const SentryConfig& config) {
         return false;
     }
 
+    // Start "online": consent given so normal uploads proceed until the
+    // Settings "Go Offline" toggle revokes it.
+    sentry_user_consent_give();
+    s_offline = false;
+
     s_initialized = true;
     apply_global_enrichment(config, s_release);
     return true;
@@ -245,6 +262,7 @@ void SentryManager::shutdown() {
     }
     sentry_close();
     s_initialized = false;
+    s_offline = false;
 }
 
 void SentryManager::app_hang_heartbeat() {
@@ -252,6 +270,24 @@ void SentryManager::app_hang_heartbeat() {
         sentry_app_hang_heartbeat();
     }
 }
+
+void SentryManager::set_offline(bool offline) {
+    if (!s_initialized || s_offline == offline) {
+        return;
+    }
+    s_offline = offline;
+    if (offline) {
+        // Revoking consent blocks uploads; with cache_keep + http_retry the
+        // SDK writes envelopes to database_path/cache/ instead of dropping them.
+        sentry_user_consent_revoke();
+    } else {
+        // Giving consent again lets http_retry pick up cached envelopes and
+        // flush them to Sentry — the "drain when back online" part of the demo.
+        sentry_user_consent_give();
+    }
+}
+
+bool SentryManager::is_offline() { return s_initialized && s_offline; }
 
 const std::string& SentryManager::release() { return s_release; }
 
