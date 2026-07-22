@@ -623,8 +623,36 @@ void draw_drain_envelopes(ImDrawList* dl) {
 }
 
 void chaos_offline_bar(AppState& st) {
-    const bool offline = SentryManager::is_offline();
+    const bool demo_offline = SentryManager::is_offline();
+    const bool consent = SentryManager::has_user_consent();
+    const bool uploading = consent && !demo_offline;
     const int queued = static_cast<int>(OfflineQueueMonitor::queued_count());
+
+    // Three visible states — consent revoked always wins the title.
+    enum class Gate { Online, DemoOffline, ConsentRevoked };
+    Gate gate = Gate::Online;
+    if (!consent) gate = Gate::ConsentRevoked;
+    else if (demo_offline) gate = Gate::DemoOffline;
+
+    ImVec4 status_col = theme::color::ok;
+    const char* title = "Online - uploading";
+    const char* hint = "Toggle Offline, trigger faults, then come back to drain.";
+    switch (gate) {
+        case Gate::Online:
+            break;
+        case Gate::DemoOffline:
+            status_col = theme::color::warn;
+            title = "Offline - caching envelopes";
+            hint = "Demo offline. Trigger faults to fill the local queue.";
+            break;
+        case Gate::ConsentRevoked:
+            status_col = theme::color::danger;
+            title = "Consent revoked - caching";
+            hint = demo_offline
+                ? "Consent blocks uploads (Settings). Demo offline is also on."
+                : "Uploads blocked in Settings. Give consent there to drain.";
+            break;
+    }
 
     // Visual count: while draining, ease down from the pre-drain total.
     int shown = queued;
@@ -634,21 +662,18 @@ void chaos_offline_bar(AppState& st) {
         if (shown < queued) shown = queued;
     }
 
-    const ImVec4 status_col = offline ? theme::color::warn : theme::color::ok;
     if (begin_card("offline_bar", 64, ImVec2(16, 12))) {
         status_dot(status_col);
         ImGui::SameLine(0, 8);
         ImGui::BeginGroup();
         ImGui::PushFont(theme::fonts().h2);
         ImGui::PushStyleColor(ImGuiCol_Text, status_col);
-        ImGui::TextUnformatted(offline ? "Offline - caching envelopes" : "Online - uploading");
+        ImGui::TextUnformatted(title);
         ImGui::PopStyleColor();
         ImGui::PopFont();
         ImGui::PushFont(theme::fonts().small);
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
-        ImGui::TextUnformatted(
-            offline ? "Trigger faults to fill the local queue."
-                    : "Toggle Offline, trigger faults, then come back to drain.");
+        ImGui::TextUnformatted(hint);
         ImGui::PopStyleColor();
         ImGui::PopFont();
         ImGui::EndGroup();
@@ -672,7 +697,7 @@ void chaos_offline_bar(AppState& st) {
         ImVec2 b0 = badge_min;
         ImVec2 b1(b0.x + hit_w, b0.y + row_h);
 
-        const ImVec4 env_col = offline ? theme::color::warn : theme::color::text_dim;
+        const ImVec4 env_col = uploading ? theme::color::text_dim : status_col;
         const ImVec2 icon_pos(b0.x + pad_x, b0.y + (row_h - icon_sz) * 0.5f);
         dl->AddText(ifont, icon_sz, icon_pos, u32(env_col), envelope);
 
@@ -695,16 +720,17 @@ void chaos_offline_bar(AppState& st) {
         ImGui::Dummy(ImVec2(hit_w, row_h));
         ImGui::SameLine(0, 10);
 
-        ImVec4 btn = offline ? theme::color::ok : theme::color::warn;
-        const char* label = offline ? "Go Online" : "Go Offline";
+        ImVec4 btn = demo_offline ? theme::color::ok : theme::color::warn;
+        const char* label = demo_offline ? "Go Online" : "Go Offline";
         ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(btn, 0.18f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(btn, 0.32f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, btn);
         ImGui::PushStyleColor(ImGuiCol_Text, btn);
-        if (ImGui::Button(with_icon(offline ? ICON_CHECK : ICON_BOLT, label).c_str(),
+        if (ImGui::Button(with_icon(demo_offline ? ICON_CHECK : ICON_BOLT, label).c_str(),
                           ImVec2(120.f, row_h))) {
-            const bool next = !offline;
-            if (!next && queued > 0) {
+            const bool next = !demo_offline;
+            // Drain animation only when coming online and consent still allows upload.
+            if (!next && consent && queued > 0) {
                 g_drain.active = true;
                 g_drain.t = 0.f;
                 g_drain.from_count = queued;
@@ -712,10 +738,16 @@ void chaos_offline_bar(AppState& st) {
             }
             SentryManager::set_offline(next);
             if (st.console) {
-                st.console->push(
-                    next ? ConsoleLog::Level::Warn : ConsoleLog::Level::Info, "sentry",
-                    next ? "Go Offline: uploads paused - caching envelopes"
-                         : "Go Online: draining cached envelopes to Sentry");
+                if (next) {
+                    st.console->push(ConsoleLog::Level::Warn, "sentry",
+                                     "Go Offline: demo pause - caching envelopes");
+                } else if (!consent) {
+                    st.console->push(ConsoleLog::Level::Warn, "sentry",
+                                     "Go Online: demo cleared, but consent still revoked in Settings");
+                } else {
+                    st.console->push(ConsoleLog::Level::Info, "sentry",
+                                     "Go Online: draining cached envelopes to Sentry");
+                }
             }
         }
         ImGui::PopStyleColor(4);
@@ -832,23 +864,64 @@ void page_settings(AppState& st) {
             kv_row("Backend", "flask.empower-plant.com");
             ImGui::Dummy(ImVec2(0, 16));
 
-            // Demo control lives on Chaos Lab (Go Offline / envelope badge).
-            section("Offline caching");
+            // GDPR-style consent (Settings) — separate from Chaos Lab Go Offline.
+            section("User consent");
             ImGui::PushFont(theme::fonts().small);
             ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(
-                "Use Chaos Lab's Go Offline toggle to queue envelopes under "
-                ".sentry-native/cache/, then Go Online to drain them.");
+                "Upload consent for Sentry. Revoking caches new envelopes on "
+                "disk until consent is given again. Chaos Lab's Go Offline is a "
+                "separate demo switch; both must allow uploads for sending.");
             ImGui::PopTextWrapPos();
             ImGui::PopStyleColor();
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 8));
-            const bool offline = SentryManager::is_offline();
-            ImVec4 status_col = offline ? theme::color::warn : theme::color::ok;
-            status_dot(status_col);
+
+            const bool consent = SentryManager::has_user_consent();
+            ImVec4 consent_col = consent ? theme::color::ok : theme::color::warn;
+            status_dot(consent_col);
             ImGui::SameLine(0, 8);
-            chip(offline ? "OFFLINE - caching" : "ONLINE - uploading", status_col);
+            chip(consent ? "CONSENT GIVEN" : "CONSENT REVOKED", consent_col);
+            ImGui::SameLine(0, 12);
+            if (SentryManager::is_offline()) {
+                chip("Chaos Lab offline", theme::color::text_faint);
+            }
+
+            ImGui::Dummy(ImVec2(0, 10));
+            ImVec4 btn = consent ? theme::color::warn : theme::color::ok;
+            const char* label = consent ? "Revoke consent" : "Give consent";
+            ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(btn, 0.18f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(btn, 0.32f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, btn);
+            ImGui::PushStyleColor(ImGuiCol_Text, btn);
+            ImGui::PushFont(theme::fonts().h2);
+            if (ImGui::Button(with_icon(consent ? ICON_BOLT : ICON_CHECK, label).c_str(),
+                              ImVec2(-FLT_MIN, ImGui::GetFrameHeight() + 8))) {
+                const bool next = !consent;
+                SentryManager::set_user_consent(next);
+                if (st.console) {
+                    st.console->push(
+                        next ? ConsoleLog::Level::Info : ConsoleLog::Level::Warn, "sentry",
+                        next ? "User consent given - uploads allowed (if not demo-offline)"
+                             : "User consent revoked - caching envelopes until given");
+                }
+            }
+            ImGui::PopFont();
+            ImGui::PopStyleColor(4);
+
+            ImGui::Dummy(ImVec2(0, 16));
+            section("Offline demo");
+            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(
+                "Hold/drain visuals live on Chaos Lab (Go Offline, envelope "
+                "badge, drain animation). That switch does not change this "
+                "consent setting.");
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+            ImGui::PopFont();
         }
         end_card();
 
@@ -860,7 +933,7 @@ void page_settings(AppState& st) {
                 "Performance tracing", "Distributed tracing", "Structured logs",
                 "Metrics", "Sessions / release health", "App-hang detection",
                 "Screenshots", "External crash reporter",
-                "Offline cache keep", "HTTP retry / drain"};
+                "User consent", "Offline cache keep", "HTTP retry / drain"};
             for (const char* fe : feats) feature_row(fe);
             ImGui::PopStyleVar();
         }

@@ -59,6 +59,10 @@ public:
     // know about user-consent internals.
     static void set_offline(bool offline);
     static bool is_offline();
+    // GDPR-style upload consent (Settings). Independent of Chaos Lab Go Offline.
+    // SDK uploads only when consent is given AND demo offline is off.
+    static void set_user_consent(bool given);
+    static bool has_user_consent();
 
     // The release string actually used (resolved from config/env/built-in).
     static const std::string& release();
@@ -66,6 +70,8 @@ public:
     static bool initialized();
 
 private:
+    static void sync_upload_gate();
+
     static bool s_initialized;
     static bool s_offline;
     static std::string s_release;
