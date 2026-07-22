@@ -1,4 +1,5 @@
 #include "core/sentry_manager.h"
+#include "core/offline_queue_monitor.h"
 #include "core/platform.h"
 
 #include <cstdlib>
@@ -164,6 +165,8 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_environment(options, config.environment.c_str());
     sentry_options_set_database_path(options, config.database_path.c_str());
     sentry_options_set_debug(options, config.debug ? 1 : 0);
+    // Point the UI badge watcher at the same folder the SDK will use.
+    OfflineQueueMonitor::configure(config.database_path);
 
     // The native backend launches an out-of-process crash daemon (sentry-crash),
     // which must be locatable. Default to the daemon copied beside the binary.

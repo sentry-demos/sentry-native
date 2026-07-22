@@ -68,6 +68,7 @@ FetchContent_MakeAvailable(sentry)
 # ---------------------------------------------------------------------------
 add_library(empower_core STATIC
     src/core/sentry_manager.cpp
+    src/core/offline_queue_monitor.cpp
     src/core/platform.cpp
     src/core/backend_client.cpp
     src/core/command_server.cpp
