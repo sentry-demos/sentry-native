@@ -226,8 +226,11 @@ void scenario_convoluted() {
     cal->on_sample = [](int sample) { (void)sample; };
 
     std::vector<uint8_t> blob(64, 0xC0);
-    sentry_attach_bytes(reinterpret_cast<const char*>(blob.data()), blob.size(),
-                        "calibration-blob.bin");
+    sentry_attachment_t* attachment = sentry_attach_bytes(
+        reinterpret_cast<const char*>(blob.data()), blob.size(),
+        "calibration-blob.bin");
+    sentry_attachment_set_type(attachment, SENTRY_ATTACHMENT_TYPE_GENERIC);
+    sentry_attachment_set_content_type(attachment, "application/octet-stream");
 
     breadcrumb("firmware", "operator triggered firmware flash with calibration");
     // The corruption happens off the UI thread, in the flash worker...

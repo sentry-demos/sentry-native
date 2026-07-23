@@ -115,7 +115,8 @@ int main(int argc, char** argv) {
         : empower::path_join(empower::executable_dir(), "screenshot.png");
     if (FILE* f = std::fopen(shot.c_str(), "rb")) {
         std::fclose(f);
-        sentry_attach_file(shot.c_str());
+        sentry_attachment_t* screenshot = sentry_attach_file(shot.c_str());
+        sentry_attachment_set_content_type(screenshot, "image/png");
     }
 
     empower::FleetModel fleet;

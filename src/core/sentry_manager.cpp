@@ -160,6 +160,8 @@ bool SentryManager::init(const SentryConfig& config) {
         ? config.release
         : env_or("SENTRY_RELEASE", built_release);
     sentry_options_set_release(options, s_release.c_str());
+    // Same release string can ship on multiple OSes; dist tells Sentry which build.
+    sentry_options_set_dist(options, EMPOWER_PLATFORM);
     sentry_options_set_environment(options, config.environment.c_str());
     sentry_options_set_database_path(options, config.database_path.c_str());
     sentry_options_set_debug(options, config.debug ? 1 : 0);

@@ -154,7 +154,11 @@ int main(int argc, char** argv) {
     // disk and attach it so crashes carry a screenshot on every platform.
     const std::string screenshot_path = cfg.database_path + "/screenshot.png";
 #if defined(EMPOWER_HAVE_STB)
-    if (sentry_ok) sentry_attach_file(screenshot_path.c_str());
+    if (sentry_ok) {
+        sentry_attachment_t* screenshot =
+            sentry_attach_file(screenshot_path.c_str());
+        sentry_attachment_set_content_type(screenshot, "image/png");
+    }
 #endif
 
     empower::FleetModel fleet;
