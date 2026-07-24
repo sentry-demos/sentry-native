@@ -73,6 +73,7 @@ private:
     static void sync_upload_gate();
 
     static bool s_initialized;
+    static bool s_consent_given;
     static bool s_offline;
     static std::string s_release;
 };
