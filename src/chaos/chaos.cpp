@@ -293,6 +293,8 @@ void scenario_app_hang(ConsoleLog* console) {
 
     // A sizable diagnostic dump attached to the event (~256 KB).
     std::vector<char> dump(256 * 1024);
+    // For TUS large uploads (>= 100 MiB), enable large attachments in
+    // sentry_manager.cpp and attach a file via sentry_attach_file instead.
     for (size_t i = 0; i < dump.size(); ++i)
         dump[i] = static_cast<char>('A' + (i % 26));
     sentry_attach_bytes(dump.data(), dump.size(), "telemetry-flush-dump.txt");
