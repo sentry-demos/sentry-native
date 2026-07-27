@@ -20,6 +20,7 @@
 
 #include "app/console_log.h"
 #include "app/fleet_model.h"
+#include "app/telemetry_feed.h"
 #include "app/theme.h"
 #include "app/ui.h"
 #include "chaos/chaos.h"
@@ -160,6 +161,10 @@ int main(int argc, char** argv) {
     empower::FleetModel fleet;
     fleet.init();
     empower::ConsoleLog console;
+    empower::TelemetryFeed telemetry;
+    if (sentry_ok) {
+        empower::wire_telemetry_feed(telemetry);
+    }
     console.push(empower::ConsoleLog::Level::Info, "boot",
                  "Fleet Control Center online");
     console.push(sentry_ok ? empower::ConsoleLog::Level::Info
@@ -167,16 +172,12 @@ int main(int argc, char** argv) {
                  "sentry",
                  sentry_ok ? "Sentry native backend initialized"
                            : "Sentry init failed (events will not be sent)");
-    // Seed the Telemetry feed with representative recent activity.
     console.push(empower::ConsoleLog::Level::Info, "session", "session started");
-    console.push(empower::ConsoleLog::Level::Info, "metric", "sent fleet.devices_online = 11");
-    console.push(empower::ConsoleLog::Level::Info, "log", "fleet heartbeat: 11 online, queue 6");
-    console.push(empower::ConsoleLog::Level::Debug, "sentry", "flushed 4 envelopes");
-    console.push(empower::ConsoleLog::Level::Info, "metric", "sent fleet.frame_time = 16.4 ms");
 
     empower::AppState state;
     state.fleet = &fleet;
     state.console = &console;
+    state.telemetry = sentry_ok ? &telemetry : nullptr;
     state.environment = cfg.environment;
     state.release = empower::SentryManager::release();
     state.dsn_host = dsn_host(dsn);
@@ -274,6 +275,7 @@ int main(int argc, char** argv) {
     glfwDestroyWindow(window);
     glfwTerminate();
 
+    empower::unwire_telemetry_feed();
     empower::SentryManager::shutdown();
     return 0;
 }

@@ -7,11 +7,13 @@ namespace empower {
 
 class FleetModel;
 class ConsoleLog;
+class TelemetryFeed;
 
 // Mutable UI state shared across frames. Owned by the app entry point.
 struct AppState {
     FleetModel* fleet = nullptr;
     ConsoleLog* console = nullptr;
+    TelemetryFeed* telemetry = nullptr;
 
     // Identity shown in the sidebar / header.
     std::string operator_name = "John Gardener";

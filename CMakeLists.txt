@@ -238,6 +238,7 @@ if(EMPOWER_BUILD_GUI)
 
     add_executable(empower-fleet
         src/app/main_gui.cpp
+        src/app/telemetry_feed.cpp
         src/app/theme.cpp
         src/app/ui.cpp)
     target_link_libraries(empower-fleet PRIVATE empower_core imgui)

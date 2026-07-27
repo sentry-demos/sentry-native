@@ -99,11 +99,26 @@ sentry_value_t filter_telemetry(
     return payload;
 }
 
+SentryManager::TelemetryTapFn g_tap_metric;
+SentryManager::TelemetryTapFn g_tap_log;
+
 sentry_value_t before_send_log(sentry_value_t log, void* user_data) {
+    // Tap first so the UI sees blocked payloads too; then maybe drop upload.
+    if (g_tap_log) {
+        const char* level =
+            sentry_value_as_string(sentry_value_get_by_key(log, "level"));
+        g_tap_log(log, SentryManager::is_telemetry_blocked(level));
+    }
     return filter_telemetry(log, "level", user_data);
 }
 
 sentry_value_t before_send_metric(sentry_value_t metric, void* user_data) {
+    // Same tap-then-filter order as before_send_log.
+    if (g_tap_metric) {
+        const char* name =
+            sentry_value_as_string(sentry_value_get_by_key(metric, "name"));
+        g_tap_metric(metric, SentryManager::is_telemetry_blocked(name));
+    }
     return filter_telemetry(metric, "name", user_data);
 }
 
@@ -295,6 +310,7 @@ void SentryManager::shutdown() {
     s_consent_given = true;
     s_offline = false;
     s_blocked_telemetry.clear();
+    clear_telemetry_tap();
 }
 
 void SentryManager::app_hang_heartbeat() {
@@ -350,6 +366,16 @@ void SentryManager::set_telemetry_blocked(const char* key, bool blocked) {
 
 bool SentryManager::is_telemetry_blocked(const char* key) {
     return key && s_blocked_telemetry.count(key) != 0;
+}
+
+void SentryManager::set_telemetry_tap(TelemetryTapFn on_metric, TelemetryTapFn on_log) {
+    g_tap_metric = std::move(on_metric);
+    g_tap_log = std::move(on_log);
+}
+
+void SentryManager::clear_telemetry_tap() {
+    g_tap_metric = nullptr;
+    g_tap_log = nullptr;
 }
 
 const std::string& SentryManager::release() { return s_release; }

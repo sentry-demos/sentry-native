@@ -4,6 +4,7 @@
 #include "app/fleet_model.h"
 #include "app/icons.h"
 #include "app/theme.h"
+#include "app/telemetry_feed.h"
 #include "chaos/chaos.h"
 #include "core/sentry_manager.h"
 #include "core/offline_queue_monitor.h"
@@ -433,46 +434,60 @@ void gauge_card(const char* label, float frac, ImVec4 col, const char* value, fl
     end_card();
 }
 
-void metric_table_row(const char* name, const char* value, const char* type) {
+void metric_table_row(const char* name, const char* value, const char* type,
+                      bool blocked = false) {
+    const ImVec4 faint = theme::color::text_faint;
     ImGui::TableNextColumn();
     ImGui::PushFont(theme::fonts().small);
-    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
+    ImGui::PushStyleColor(ImGuiCol_Text, blocked ? faint : theme::color::accent_hi);
     ImGui::TextUnformatted(name);
     ImGui::PopStyleColor();
     ImGui::TableNextColumn();
+    if (blocked) ImGui::PushStyleColor(ImGuiCol_Text, faint);
     ImGui::TextUnformatted(value);
+    if (blocked) ImGui::PopStyleColor();
     ImGui::TableNextColumn();
-    dim_text("%s", type);
+    if (blocked) {
+        ImGui::PushStyleColor(ImGuiCol_Text, faint);
+        ImGui::TextUnformatted("blocked");
+        ImGui::PopStyleColor();
+    } else {
+        dim_text("%s", type);
+    }
     ImGui::PopFont();
 }
 
-void log_feed(AppState& st) {
-    if (!st.console) return;
+void telemetry_log_feed(const TelemetryFeed* feed) {
     ImGui::PushFont(theme::fonts().small);
-    for (const auto& ln : st.console->lines()) {
-        ImVec4 col = theme::color::text_dim;
-        const char* tag = "info";
-        switch (ln.level) {
-            case ConsoleLog::Level::Debug: col = theme::color::text_faint; tag = "debug"; break;
-            case ConsoleLog::Level::Info:  col = theme::color::ok;         tag = "info";  break;
-            case ConsoleLog::Level::Warn:  col = theme::color::warn;       tag = "warn";  break;
-            case ConsoleLog::Level::Error: col = theme::color::danger;     tag = "error"; break;
+    if (!feed || feed->logs().empty()) {
+        dim_text("waiting for sentry_log_* …");
+        ImGui::PopFont();
+        return;
+    }
+    for (const auto& ln : feed->logs()) {
+        if (ln.blocked) {
+            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
+            ImGui::Text("%s  blocked  %s", ln.time.c_str(), ln.body.c_str());
+            ImGui::PopStyleColor();
+            continue;
         }
+        ImVec4 level_col = theme::color::text_dim;
+        if (ln.level == "warn") level_col = theme::color::warn;
+        else if (ln.level == "error" || ln.level == "fatal") level_col = theme::color::danger;
+        else if (ln.level == "info") level_col = theme::color::ok;
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
         ImGui::Text("%s", ln.time.c_str());
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, col);
-        ImGui::Text("%-5s", tag);
+        ImGui::PushStyleColor(ImGuiCol_Text, level_col);
+        ImGui::Text("%-5s", ln.level.c_str());
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
-        ImGui::Text("%-8s", ln.source.c_str());
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::TextUnformatted(ln.text.c_str());
+        ImGui::TextUnformatted(ln.body.c_str());
     }
-    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) ImGui::SetScrollHereY(1.0f);
+    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) {
+        ImGui::SetScrollHereY(1.0f);
+    }
     ImGui::PopFont();
 }
 
@@ -503,25 +518,28 @@ void page_telemetry(AppState& st) {
         if (begin_card("metrics", row_h)) {
             heading(theme::fonts().h2, with_icon(ICON_CHART, "Metrics").c_str());
             ImGui::PushFont(theme::fonts().small);
-            dim_text("emitted via sentry_metrics_* every 2s");
+            dim_text("live from before_send_metric");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
-            char m0[16], m1[16], m2[16], m3[16], m4[16];
-            std::snprintf(m0, sizeof(m0), "%.1f ms", f.frame_time().latest());
-            std::snprintf(m1, sizeof(m1), "%.2f", f.cpu_load().latest());
-            std::snprintf(m2, sizeof(m2), "%.1f ms", f.net_latency().latest());
-            std::snprintf(m3, sizeof(m3), "%d", f.queue_depth());
-            std::snprintf(m4, sizeof(m4), "%d", f.online_count());
+            const auto& metrics =
+                st.telemetry ? st.telemetry->metrics()
+                             : std::vector<TelemetryFeed::Metric>{};
             if (ImGui::BeginTable("mt", 3,
                     ImGuiTableFlags_RowBg | ImGuiTableFlags_PadOuterX)) {
                 ImGui::TableSetupColumn("metric", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthFixed, 80);
                 ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 86);
-                metric_table_row("fleet.frame_time", m0, "distribution");
-                metric_table_row("fleet.cpu_load", m1, "gauge");
-                metric_table_row("fleet.backend_latency", m2, "gauge");
-                metric_table_row("fleet.job_queue_depth", m3, "gauge");
-                metric_table_row("fleet.devices_online", m4, "gauge");
+                if (metrics.empty()) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    dim_text("waiting for sentry_metrics_* …");
+                } else {
+                    for (const auto& m : metrics) {
+                        ImGui::TableNextRow();
+                        metric_table_row(
+                            m.name.c_str(), m.value.c_str(), m.type.c_str(), m.blocked);
+                    }
+                }
                 ImGui::EndTable();
             }
         }
@@ -531,11 +549,11 @@ void page_telemetry(AppState& st) {
         if (begin_card("logs", row_h)) {
             heading(theme::fonts().h2, with_icon(ICON_TERMINAL, "Logs").c_str());
             ImGui::PushFont(theme::fonts().small);
-            dim_text("structured logs via sentry_log_*");
+            dim_text("live from before_send_log");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
             ImGui::BeginChild("logscroll", ImVec2(0, 0), false);
-            log_feed(st);
+            telemetry_log_feed(st.telemetry);
             ImGui::EndChild();
         }
         end_card();
