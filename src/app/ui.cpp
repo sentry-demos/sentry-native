@@ -958,6 +958,10 @@ void page_settings(AppState& st) {
             if (ImGui::Checkbox("Block fleet.cpu_load metric", &block_cpu)) {
                 SentryManager::set_telemetry_blocked("fleet.cpu_load", block_cpu);
             }
+            bool block_checkout = SentryManager::is_telemetry_blocked("checkout");
+            if (ImGui::Checkbox("Block checkout transactions", &block_checkout)) {
+                SentryManager::set_telemetry_blocked("checkout", block_checkout);
+            }
 
             ImGui::PopStyleVar(2);
             ImGui::PopFont();

@@ -122,6 +122,10 @@ sentry_value_t before_send_metric(sentry_value_t metric, void* user_data) {
     return filter_telemetry(metric, "name", user_data);
 }
 
+sentry_value_t before_transaction(sentry_value_t tx, void* user_data) {
+    return filter_telemetry(tx, "transaction", user_data);
+}
+
 sentry_value_t str_attr(const char* s) {
     return sentry_value_new_attribute(sentry_value_new_string(s), nullptr);
 }
@@ -285,6 +289,8 @@ bool SentryManager::init(const SentryConfig& config) {
         options, before_send_log, &SentryManager::s_blocked_telemetry);
     sentry_options_set_before_send_metric(
         options, before_send_metric, &SentryManager::s_blocked_telemetry);
+    sentry_options_set_before_transaction(
+        options, before_transaction, &SentryManager::s_blocked_telemetry);
 
     if (sentry_init(options) != 0) {
         std::fprintf(stderr, "[empower] sentry_init failed\n");
