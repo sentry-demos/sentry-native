@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_set>
 
 // SentryManager centralizes initialization, configuration and shutdown of the
 // Sentry Native SDK for the Empower Plant Fleet Control Center demo.
@@ -64,6 +65,11 @@ public:
     static void set_user_consent(bool given);
     static bool has_user_consent();
 
+    // Shared block list for before_send_log (log "level") and
+    // before_send_metric (metric "name").
+    static void set_telemetry_blocked(const char* key, bool blocked);
+    static bool is_telemetry_blocked(const char* key);
+
     // The release string actually used (resolved from config/env/built-in).
     static const std::string& release();
 
@@ -75,6 +81,7 @@ private:
     static bool s_initialized;
     static bool s_consent_given;
     static bool s_offline;
+    static std::unordered_set<std::string> s_blocked_telemetry;
     static std::string s_release;
 };
 

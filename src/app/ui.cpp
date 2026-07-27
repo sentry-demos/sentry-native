@@ -927,6 +927,24 @@ void page_settings(AppState& st) {
 
         ImGui::TableNextColumn();
         if (begin_card("right")) {
+            section("Telemetry filters");
+            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 4));
+
+            bool block_info = SentryManager::is_telemetry_blocked("info");
+            if (ImGui::Checkbox("Block info logs", &block_info)) {
+                SentryManager::set_telemetry_blocked("info", block_info);
+            }
+            bool block_cpu = SentryManager::is_telemetry_blocked("fleet.cpu_load");
+            if (ImGui::Checkbox("Block fleet.cpu_load metric", &block_cpu)) {
+                SentryManager::set_telemetry_blocked("fleet.cpu_load", block_cpu);
+            }
+
+            ImGui::PopStyleVar(2);
+            ImGui::PopFont();
+
+            ImGui::Dummy(ImVec2(0, 16));
             section("Enabled features");
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12, 11));
             const char* feats[] = {
