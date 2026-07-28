@@ -83,9 +83,32 @@ sentry_value_t before_send(sentry_value_t event, void* /*hint*/, void* /*closure
         sentry_value_set_by_key(event, "tags", tags);
     }
     sentry_value_set_by_key(tags, "demo", sentry_value_new_string("empower-plant-native"));
+    sentry_value_set_by_key(tags, "event.hook", sentry_value_new_string("before_send"));
     return event;
 }
 
+sentry_value_t on_crash(
+    const sentry_ucontext_t* /*uctx*/, sentry_value_t event, void* /*data*/) {
+    sentry_value_t tags = sentry_value_get_by_key(event, "tags");
+    if (sentry_value_is_null(tags)) {
+        tags = sentry_value_new_object();
+        sentry_value_set_by_key(event, "tags", tags);
+    }
+    sentry_value_set_by_key(tags, "demo", sentry_value_new_string("empower-plant-native"));
+    sentry_value_set_by_key(tags, "event.hook", sentry_value_new_string("on_crash"));
+    return event;
+}
+
+// Signal-safety note:
+// before_transaction (and before_send / on_crash) may run
+// while the SDK is handling a crash — inside a signal handler or Windows
+// exception filter. In that context only async-signal-safe code is allowed: no
+// malloc, mutexes, or C++ containers like std::unordered_set (they can deadlock
+// if the crashing thread held the heap lock). This helper uses
+// std::unordered_set, which is fine for the demo's log/metric filters on normal
+// threads, but not for production crash paths. A real integration would look up
+// blocked keys with fixed C strings and sentry_value_* APIs only.
+//
 // Drop payload when payload[field] is on the block list (user_data).
 sentry_value_t filter_telemetry(
     sentry_value_t payload, const char* field, void* user_data) {
@@ -291,6 +314,9 @@ bool SentryManager::init(const SentryConfig& config) {
         options, before_send_metric, &SentryManager::s_blocked_telemetry);
     sentry_options_set_before_transaction(
         options, before_transaction, &SentryManager::s_blocked_telemetry);
+
+    // The on_crash callback replaces the before_send callback for crash events.
+    sentry_options_set_on_crash(options, on_crash, nullptr);
 
     if (sentry_init(options) != 0) {
         std::fprintf(stderr, "[empower] sentry_init failed\n");
