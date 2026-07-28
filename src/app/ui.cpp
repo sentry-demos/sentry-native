@@ -90,7 +90,7 @@ void chip(const char* text, ImVec4 col) {
 // One aligned meter line: [icon LABEL] [bar] [value%], all on one baseline.
 void meter_row(const char* icon, const char* label, float v, ImVec4 col) {
     float full = ImGui::GetContentRegionAvail().x;
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     float fs = ImGui::GetFontSize();
     float row_h = fs + 4;
     ImVec2 p0 = ImGui::GetCursorScreenPos();
@@ -171,7 +171,7 @@ void brand_mark() {
     ImGui::PopStyleColor();
     ImGui::PopFont();
 
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     center_cursor_x(ImGui::CalcTextSize("FLEET CONTROL").x);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
     ImGui::TextUnformatted("FLEET CONTROL");
@@ -233,7 +233,7 @@ void render_sidebar(AppState& st) {
     brand_mark();
     ImGui::Dummy(ImVec2(0, 18));
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     ImGui::TextUnformatted("MENU");
     ImGui::PopFont();
     ImGui::PopStyleColor();
@@ -256,7 +256,7 @@ void render_sidebar(AppState& st) {
     ImGui::SameLine(0, 11);
     ImGui::BeginGroup();
     ImGui::TextUnformatted(st.operator_name.c_str());
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     dim_text("Operator  -  %s", st.environment.c_str());
     status_dot(st.dsn_configured ? theme::color::ok : theme::color::warn, 3.5f);
     ImGui::SameLine();
@@ -317,7 +317,7 @@ void stat_tile(const char* label, const char* value, ImVec4 col) {
     if (begin_card(label, 96)) {
         // Label pinned to the top of the card.
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         ImGui::TextUnformatted(label);
         ImGui::PopFont();
         ImGui::PopStyleColor();
@@ -376,7 +376,7 @@ void page_fleet(AppState& st) {
                 ImGui::TextUnformatted(d.name.c_str());
                 ImGui::PopFont();
                 ImGui::SameLine();
-                ImGui::PushFont(theme::fonts().small);
+                ImGui::PushFont(theme::fonts().caption);
                 ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
                                      ImGui::CalcTextSize(d.firmware.c_str()).x);
                 dim_text("%s", d.firmware.c_str());
@@ -425,7 +425,7 @@ void gauge_card(const char* label, float frac, ImVec4 col, const char* value, fl
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                     ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f), u32(theme::color::text), value);
         ImGui::PopFont();
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         float lw = ImGui::CalcTextSize(label).x;
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                     ImVec2(c.x - lw * 0.5f, c.y + r + 12), u32(theme::color::text_dim), label);
@@ -438,7 +438,7 @@ void metric_table_row(const char* name, const char* value, const char* type,
                       bool blocked = false) {
     const ImVec4 faint = theme::color::text_faint;
     ImGui::TableNextColumn();
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     ImGui::PushStyleColor(ImGuiCol_Text, blocked ? faint : theme::color::accent_hi);
     ImGui::TextUnformatted(name);
     ImGui::PopStyleColor();
@@ -458,7 +458,7 @@ void metric_table_row(const char* name, const char* value, const char* type,
 }
 
 void telemetry_log_feed(const TelemetryFeed* feed) {
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     if (!feed || feed->logs().empty()) {
         dim_text("waiting for sentry_log_* …");
         ImGui::PopFont();
@@ -517,7 +517,7 @@ void page_telemetry(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("metrics", row_h)) {
             heading(theme::fonts().h2, with_icon(ICON_CHART, "Metrics").c_str());
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             dim_text("live from before_send_metric");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
@@ -548,7 +548,7 @@ void page_telemetry(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("logs", row_h)) {
             heading(theme::fonts().h2, with_icon(ICON_TERMINAL, "Logs").c_str());
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             dim_text("live from before_send_log");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
@@ -580,7 +580,7 @@ void page_pipelines(AppState&) {
             ImGui::PopFont();
             ImGui::SameLine(ImGui::GetContentRegionAvail().x - 64);
             chip("running", r.col);
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             dim_text("%s", r.op);
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 4));
@@ -689,7 +689,7 @@ void chaos_offline_bar(AppState& st) {
         ImGui::TextUnformatted(title);
         ImGui::PopStyleColor();
         ImGui::PopFont();
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
         ImGui::TextUnformatted(hint);
         ImGui::PopStyleColor();
@@ -724,7 +724,7 @@ void chaos_offline_bar(AppState& st) {
             if (shown > 99) std::snprintf(count_buf, sizeof(count_buf), "99+");
             else std::snprintf(count_buf, sizeof(count_buf), "%d", shown);
 
-            ImFont* nfont = theme::fonts().small;
+            ImFont* nfont = theme::fonts().caption;
             const float nsz = 11.f;
             ImVec2 ts = nfont->CalcTextSizeA(nsz, FLT_MAX, 0.f, count_buf);
             const float cr = (shown > 9) ? 8.5f : 7.5f;
@@ -801,7 +801,7 @@ void page_chaos(AppState& st) {
             if (begin_card("c", card_h, ImVec2(14, 10))) {
                 heading(theme::fonts().h2, a.label, col);
                 ImGui::Dummy(ImVec2(0, 1));
-                ImGui::PushFont(theme::fonts().small);
+                ImGui::PushFont(theme::fonts().caption);
                 ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
                 ImGui::PushTextWrapPos(0.0f);
                 ImGui::TextUnformatted(a.desc);
@@ -856,7 +856,7 @@ void feature_row(const char* label) {
     ImGui::SameLine();
     float rx = ImGui::GetContentRegionMax().x - ImGui::CalcTextSize("enabled").x;
     ImGui::SetCursorPosX(rx);
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::ok);
     ImGui::TextUnformatted("enabled");
     ImGui::PopStyleColor();
@@ -884,7 +884,7 @@ void page_settings(AppState& st) {
 
             // GDPR-style consent (Settings) — separate from Chaos Lab Go Offline.
             section("User consent");
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(
@@ -930,7 +930,7 @@ void page_settings(AppState& st) {
 
             ImGui::Dummy(ImVec2(0, 16));
             section("Offline demo");
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(
@@ -946,7 +946,7 @@ void page_settings(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("right")) {
             section("Telemetry filters");
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 4));
 

@@ -59,7 +59,7 @@ void load_fonts(float dpi_scale) {
         const std::string& med = medium.empty() ? regular : medium;
         g_fonts.body = add(regular, 15.5f, dpi_scale);
         g_fonts.bold = add(med, 15.5f, dpi_scale);
-        g_fonts.small = add(regular, 13.0f, dpi_scale);
+        g_fonts.caption = add(regular, 13.0f, dpi_scale);
         g_fonts.h2 = add(med, 18.0f, dpi_scale);
         g_fonts.h1 = add(med, 25.0f, dpi_scale);
     } else {
@@ -67,7 +67,7 @@ void load_fonts(float dpi_scale) {
         cfg.SizePixels = 15.0f * dpi_scale;
         g_fonts.body = io.Fonts->AddFontDefault(&cfg);
         g_fonts.bold = g_fonts.body;
-        g_fonts.small = g_fonts.body;
+        g_fonts.caption = g_fonts.body;
         g_fonts.h1 = g_fonts.body;
         g_fonts.h2 = g_fonts.body;
     }
