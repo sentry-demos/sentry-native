@@ -143,6 +143,11 @@ BackendResult checkout(const std::string& base_url, ConsoleLog* console) {
 
     if (console) console->push(ConsoleLog::Level::Info, "checkout", "POST " + url);
 
+    // Without sentry_set_span, this log would not pick up the checkout trace —
+    // it would inherit whatever trace (if any) was already on the scope.
+    sentry_set_span(span);
+    sentry_log_info("checkout: POST /checkout in progress", sentry_value_new_null());
+
     // Propagate sentry-trace / baggage from the span so the backend continues
     // this same trace.
     std::vector<Header> headers;
