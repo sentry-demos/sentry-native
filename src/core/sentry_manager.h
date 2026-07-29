@@ -87,6 +87,11 @@ public:
     // True when sentry_init() detected a crash marker from the previous run.
     static bool crashed_last_run();
 
+    // Programmatic user feedback (sentry_capture_feedback_with_hint). Optional
+    // attachment_path attaches a file via hint (e.g. live UI screenshot PNG).
+    static bool capture_feedback(const char* message, const char* contact_email,
+        const char* name, const char* attachment_path = nullptr);
+
 private:
     static void sync_upload_gate();
 

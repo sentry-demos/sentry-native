@@ -20,6 +20,7 @@ struct AppState {
     std::string environment = "production";
     std::string release;
     std::string dsn_host;       // masked ingest host, for the Settings page
+    std::string screenshot_path; // live UI PNG for feedback attachments
     bool dsn_configured = false;
 
     // Navigation.

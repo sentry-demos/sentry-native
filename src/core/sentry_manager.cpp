@@ -423,4 +423,29 @@ bool SentryManager::initialized() { return s_initialized; }
 
 bool SentryManager::crashed_last_run() { return s_crashed_last_run; }
 
+bool SentryManager::capture_feedback(
+    const char* message, const char* contact_email, const char* name,
+    const char* attachment_path) {
+    if (!s_initialized || !message || !*message) {
+        return false;
+    }
+
+    sentry_value_t feedback = sentry_value_new_feedback(
+        message,
+        (contact_email && *contact_email) ? contact_email : nullptr,
+        (name && *name) ? name : nullptr,
+        nullptr);
+
+    sentry_hint_t* hint = nullptr;
+    if (attachment_path && *attachment_path && file_exists(attachment_path)) {
+        hint = sentry_hint_new();
+        if (hint) {
+            sentry_hint_attach_file(hint, attachment_path);
+        }
+    }
+
+    sentry_capture_feedback_with_hint(feedback, hint);
+    return true;
+}
+
 } // namespace empower

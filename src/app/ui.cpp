@@ -66,6 +66,171 @@ std::string with_icon(const char* icon, const char* label) {
     return label;
 }
 
+struct FeedbackWidget {
+    bool expanded = false;
+    char message[2048] = {};
+    float fab_x = 0.0f;
+    float fab_y = 0.0f;
+    float fab = 36.0f;
+};
+
+FeedbackWidget g_feedback;
+
+bool draw_feedback_fab(float x, float y, float btn, bool active) {
+    ImGuiWindowFlags wf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+                          ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
+                          ImGuiWindowFlags_NoBackground;
+
+    ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##feedback_fab", nullptr, wf);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImVec2 p1(p0.x + btn, p0.y + btn);
+    ImGui::InvisibleButton("##feedback_toggle", ImVec2(btn, btn));
+    const bool hov = ImGui::IsItemHovered();
+    const ImVec4 fill = active || hov ? theme::color::accent_hi : theme::color::accent;
+    const float round = btn * 0.22f;
+    dl->AddRectFilled(p0, p1, u32(fill), round);
+    dl->AddRect(p0, p1, u32(with_alpha(theme::color::text, 0.12f)), round);
+    ImGui::PushFont(theme::fonts().caption);
+    if (theme::has_icons()) {
+        ImVec2 ts = ImGui::CalcTextSize(ICON_BULLHORN);
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                    ImVec2(p0.x + (btn - ts.x) * 0.5f, p0.y + (btn - ts.y) * 0.5f),
+                    u32(theme::color::bg), ICON_BULLHORN);
+    } else {
+        ImVec2 ts = ImGui::CalcTextSize("!");
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                    ImVec2(p0.x + (btn - ts.x) * 0.5f, p0.y + (btn - ts.y) * 0.5f),
+                    u32(theme::color::bg), "!");
+    }
+    ImGui::PopFont();
+    const bool clicked = ImGui::IsItemClicked();
+
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+    return clicked;
+}
+
+void render_feedback_panel_body(AppState& st, float panel_w) {
+    ImGui::PushFont(theme::fonts().h2);
+    ImGui::TextUnformatted("Give Feedback");
+    ImGui::PopFont();
+    const float close_x = ImGui::GetWindowContentRegionMax().x - 26.0f;
+    ImGui::SameLine(close_x);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(theme::color::text, 0.08f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, with_alpha(theme::color::text, 0.14f));
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    if (ImGui::Button("X##feedback_close", ImVec2(24, 24))) {
+        g_feedback.expanded = false;
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::PopStyleColor(4);
+
+    ImGui::PushFont(theme::fonts().caption);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + panel_w - 28.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::TextUnformatted("What's on your mind?");
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
+    ImGui::TextUnformatted("SDK: sentry_capture_feedback_with_hint");
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::TextUnformatted("UI screenshot attached when available.");
+    ImGui::PopStyleColor();
+    ImGui::PopTextWrapPos();
+    ImGui::PopFont();
+
+    ImGui::Dummy(ImVec2(0, 6));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::color::surface_hi);
+    ImGui::PushStyleColor(ImGuiCol_Border, theme::color::border);
+    ImGui::InputTextMultiline("##feedback_message", g_feedback.message,
+                              sizeof(g_feedback.message), ImVec2(-FLT_MIN, 72),
+                              ImGuiInputTextFlags_None);
+    ImGui::PopStyleColor(2);
+
+    ImGui::Dummy(ImVec2(0, 8));
+    const bool can_send = g_feedback.message[0] != '\0' && st.dsn_configured;
+    if (!can_send) {
+        ImGui::BeginDisabled();
+    }
+    ImGui::PushStyleColor(ImGuiCol_Button, theme::color::accent);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, theme::color::accent_hi);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, theme::color::accent);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::bg);
+    if (ImGui::Button("Send Feedback", ImVec2(-FLT_MIN, 34))) {
+        const char* attachment = st.screenshot_path.empty() ? nullptr
+                                                            : st.screenshot_path.c_str();
+        if (SentryManager::capture_feedback(g_feedback.message, nullptr, st.operator_name.c_str(),
+                                            attachment)) {
+            if (st.console) {
+                st.console->push(ConsoleLog::Level::Info, "sentry",
+                                 "User feedback captured (sentry_capture_feedback_with_hint)");
+            }
+            g_feedback.message[0] = '\0';
+            g_feedback.expanded = false;
+            ImGui::CloseCurrentPopup();
+        }
+    }
+    ImGui::PopStyleColor(4);
+    if (!can_send) {
+        ImGui::EndDisabled();
+    }
+}
+
+// Megaphone in the header; popup is anchored bottom-right as an overlay.
+void render_header_feedback(float center_y, float fab, float rx) {
+    if (!SentryManager::initialized()) {
+        return;
+    }
+
+    g_feedback.fab = fab;
+    g_feedback.fab_x = rx - fab;
+    g_feedback.fab_y = center_y - fab * 0.5f;
+
+    if (draw_feedback_fab(g_feedback.fab_x, g_feedback.fab_y, fab, g_feedback.expanded)) {
+        g_feedback.expanded = !g_feedback.expanded;
+    }
+}
+
+void render_feedback_overlay(AppState& st) {
+    if (!SentryManager::initialized() || !g_feedback.expanded) {
+        return;
+    }
+
+    const float margin = 24.0f;
+    const float panel_w = 340.0f;
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->WorkPos.x + vp->WorkSize.x - margin,
+               vp->WorkPos.y + vp->WorkSize.y - margin),
+        ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+    ImGui::SetNextWindowSize(ImVec2(panel_w, 0), ImGuiCond_Always);
+
+    ImGui::OpenPopup("##feedback_popup");
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14, 12));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, theme::color::surface);
+    ImGui::PushStyleColor(ImGuiCol_Border, theme::color::border);
+    ImGuiWindowFlags popup_wf = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
+    if (ImGui::BeginPopup("##feedback_popup", popup_wf)) {
+        render_feedback_panel_body(st, panel_w);
+        ImGui::EndPopup();
+    } else {
+        g_feedback.expanded = false;
+    }
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+}
+
 void status_dot(ImVec4 col, float radius = 4.5f) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
@@ -290,8 +455,13 @@ void render_header(AppState& st) {
     const float padx = 14, dotr = 4, gap = 9, sep = 12, h = fs + 12;
     float w = padx + dotr * 2 + gap + ow + sep + 1 + sep + ew + padx;
     float rx = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+    const float fab = h;
+    const float cluster_gap = 8.0f;
+    const float pill_r = rx - fab - cluster_gap;
+    const float pill_l = pill_r - w;
+    render_header_feedback(cy, fab, rx);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 a(rx - w, cy - h * 0.5f), b(rx, cy + h * 0.5f);
+    ImVec2 a(pill_l, cy - h * 0.5f), b(pill_r, cy + h * 0.5f);
     dl->AddRectFilled(a, b, u32(theme::color::surface_hi), h * 0.5f);
     dl->AddRect(a, b, u32(theme::color::border), h * 0.5f);
     float x = a.x + padx;
@@ -905,7 +1075,7 @@ void page_settings(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("left")) {
             section("Sentry SDK");
-            kv_row("SDK", "sentry.native 0.15.2");
+            kv_row("SDK", "sentry.native 0.16.0");
             kv_row("Crash backend", "native (out-of-process)");
             kv_row("Minidump mode", "smart + client stackwalk");
             kv_row("Upload mode", "async");
@@ -1009,7 +1179,7 @@ void page_settings(AppState& st) {
             const char* feats[] = {
                 "Performance tracing", "Distributed tracing", "Structured logs",
                 "Metrics", "Sessions / release health", "App-hang detection",
-                "Screenshots", "External crash reporter",
+                "Screenshots", "External crash reporter", "Programmatic user feedback",
                 "User consent", "Offline cache keep", "HTTP retry / drain"};
             for (const char* fe : feats) feature_row(fe);
             ImGui::PopStyleVar();
@@ -1062,6 +1232,8 @@ void render_ui(AppState& st) {
     }
     ImGui::EndChild();
     ImGui::PopStyleVar();
+
+    render_feedback_overlay(st);
 
     ImGui::End();
 }

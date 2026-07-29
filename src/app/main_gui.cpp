@@ -186,6 +186,9 @@ int main(int argc, char** argv) {
     state.release = empower::SentryManager::release();
     state.dsn_host = dsn_host(dsn);
     state.dsn_configured = !dsn.empty();
+#if defined(EMPOWER_HAVE_STB)
+    state.screenshot_path = screenshot_path;
+#endif
     state.page = start_page;
     state.on_chaos = [&console](const std::string& id) {
         empower::trigger(id, &console);
