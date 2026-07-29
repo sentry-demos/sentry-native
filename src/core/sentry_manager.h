@@ -84,10 +84,14 @@ public:
 
     static bool initialized();
 
+    // True when sentry_init() detected a crash marker from the previous run.
+    static bool crashed_last_run();
+
 private:
     static void sync_upload_gate();
 
     static bool s_initialized;
+    static bool s_crashed_last_run;
     static bool s_consent_given;
     static bool s_offline;
     static std::unordered_set<std::string> s_blocked_telemetry;

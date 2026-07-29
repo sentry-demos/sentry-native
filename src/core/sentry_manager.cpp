@@ -28,6 +28,7 @@
 namespace empower {
 
 bool SentryManager::s_initialized = false;
+bool SentryManager::s_crashed_last_run = false;
 bool SentryManager::s_consent_given = true;
 bool SentryManager::s_offline = false;
 std::string SentryManager::s_release;
@@ -323,6 +324,11 @@ bool SentryManager::init(const SentryConfig& config) {
         return false;
     }
 
+    s_crashed_last_run = sentry_get_crashed_last_run() == 1;
+    if (s_crashed_last_run) {
+        sentry_clear_crashed_last_run();
+    }
+
     // Start with uploads allowed: consent given, demo offline off.
     sentry_user_consent_give();
     s_consent_given = true;
@@ -339,6 +345,7 @@ void SentryManager::shutdown() {
     }
     sentry_close();
     s_initialized = false;
+    s_crashed_last_run = false;
     s_consent_given = true;
     s_offline = false;
     s_blocked_telemetry.clear();
@@ -413,5 +420,7 @@ void SentryManager::clear_telemetry_tap() {
 const std::string& SentryManager::release() { return s_release; }
 
 bool SentryManager::initialized() { return s_initialized; }
+
+bool SentryManager::crashed_last_run() { return s_crashed_last_run; }
 
 } // namespace empower

@@ -6,6 +6,8 @@ build
 
 # Sentry runtime database / unsent envelopes / minidumps
 .sentry-native/
+.cache/
+.clangd
 /sentry-db
 *.dmp
 

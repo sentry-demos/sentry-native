@@ -312,6 +312,43 @@ void render_header(AppState& st) {
     ImGui::Dummy(ImVec2(0, 8));
 }
 
+void crash_last_run_banner(AppState& st) {
+    if (st.dismiss_crash_banner || !SentryManager::crashed_last_run()) {
+        return;
+    }
+
+    if (begin_card("crash_banner", 64, ImVec2(16, 12))) {
+        status_dot(theme::color::danger);
+        ImGui::SameLine(0, 8);
+        ImGui::BeginGroup();
+        ImGui::PushFont(theme::fonts().h2);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::danger);
+        ImGui::TextUnformatted(with_icon(ICON_BUG, "Last session crashed").c_str());
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+        ImGui::PushFont(theme::fonts().caption);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+        ImGui::TextUnformatted(
+            "sentry_get_crashed_last_run() detected a crash marker from the previous run.");
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+        ImGui::EndGroup();
+
+        const float btn_w = 72.f;
+        const float row_h = ImGui::GetFrameHeight();
+        const float y0 = ImGui::GetWindowPos().y + ImGui::GetStyle().WindowPadding.y;
+        const float y_mid = y0 + (ImGui::GetWindowHeight() - 2.f * ImGui::GetStyle().WindowPadding.y
+                                  - row_h) * 0.5f;
+        ImGui::SetCursorScreenPos(ImVec2(
+            ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - btn_w, y_mid));
+        if (ImGui::Button("Dismiss", ImVec2(btn_w, row_h))) {
+            st.dismiss_crash_banner = true;
+        }
+    }
+    end_card();
+    ImGui::Dummy(ImVec2(0, 6));
+}
+
 // ---- Fleet ---------------------------------------------------------------
 void stat_tile(const char* label, const char* value, ImVec4 col) {
     if (begin_card(label, 96)) {
@@ -1015,6 +1052,7 @@ void render_ui(AppState& st) {
     }
     ImGui::BeginChild("content", ImVec2(0, 0), false, content_flags);
     render_header(st);
+    crash_last_run_banner(st);
     switch (st.page) {
         case 0: page_fleet(st); break;
         case 1: page_telemetry(st); break;

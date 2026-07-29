@@ -173,6 +173,10 @@ int main(int argc, char** argv) {
                  sentry_ok ? "Sentry native backend initialized"
                            : "Sentry init failed (events will not be sent)");
     console.push(empower::ConsoleLog::Level::Info, "session", "session started");
+    if (sentry_ok && empower::SentryManager::crashed_last_run()) {
+        console.push(empower::ConsoleLog::Level::Warn, "sentry",
+                     "previous session ended in a crash (sentry_get_crashed_last_run)");
+    }
 
     empower::AppState state;
     state.fleet = &fleet;
