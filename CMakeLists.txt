@@ -91,7 +91,9 @@ elseif(WIN32)
 endif()
 
 # Winsock for the remote command server (used on Windows).
+# NOMINMAX: Windows headers define min/max macros that break std::min/std::max.
 if(WIN32)
+    target_compile_definitions(empower_core PUBLIC NOMINMAX)
     target_link_libraries(empower_core PUBLIC ws2_32)
 endif()
 
@@ -238,6 +240,7 @@ if(EMPOWER_BUILD_GUI)
 
     add_executable(empower-fleet
         src/app/main_gui.cpp
+        src/app/telemetry_feed.cpp
         src/app/theme.cpp
         src/app/ui.cpp)
     target_link_libraries(empower-fleet PRIVATE empower_core imgui)
