@@ -636,14 +636,14 @@ void chaos_offline_bar(AppState& st) {
 
     ImVec4 status_col = theme::color::ok;
     const char* title = "Online - uploading";
-    const char* hint = "Toggle Offline, trigger faults, then come back to drain.";
+    const char* hint = "Toggle Offline, trigger non-fatal faults, then come back online to flush them.";
     switch (gate) {
         case Gate::Online:
             break;
         case Gate::DemoOffline:
             status_col = theme::color::warn;
             title = "Offline - caching envelopes";
-            hint = "Demo offline. Trigger faults to fill the local queue.";
+            hint = "Demo offline. Trigger non-fatal faults to fill the local queue.";
             break;
         case Gate::ConsentRevoked:
             status_col = theme::color::danger;
@@ -751,10 +751,12 @@ void chaos_offline_bar(AppState& st) {
             }
         }
         ImGui::PopStyleColor(4);
-
-        draw_drain_envelopes(dl);
     }
     end_card();
+
+    // if drawn before end_card, envelope icons get clipped
+    draw_drain_envelopes(ImGui::GetForegroundDrawList());
+
     ImGui::Dummy(ImVec2(0, 6));
 }
 
@@ -910,18 +912,6 @@ void page_settings(AppState& st) {
             ImGui::PopFont();
             ImGui::PopStyleColor(4);
 
-            ImGui::Dummy(ImVec2(0, 16));
-            section("Offline demo");
-            ImGui::PushFont(theme::fonts().small);
-            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
-            ImGui::PushTextWrapPos(0.0f);
-            ImGui::TextUnformatted(
-                "Hold/drain visuals live on Chaos Lab (Go Offline, envelope "
-                "badge, drain animation). That switch does not change this "
-                "consent setting.");
-            ImGui::PopTextWrapPos();
-            ImGui::PopStyleColor();
-            ImGui::PopFont();
         }
         end_card();
 
