@@ -773,15 +773,15 @@ void page_chaos(AppState& st) {
     const int rows = std::max(1, (static_cast<int>(actions.size()) + cols - 1) / cols);
 
     // Fit the grid into the remaining viewport height (no page scroll).
-    const float gap = 8.f;
+    const float gap = 6.f;
+    const float pad = gap * 0.8f;
     const float avail = ImGui::GetContentRegionAvail().y;
-    const float pad_y = 3.f;
-    float card_h = (avail - pad_y * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
+    float card_h = (avail - pad * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
     if (card_h > 150.f) card_h = 150.f;
 
     if (ImGui::BeginTable("chaos", cols,
                           ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX)) {
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(gap * 0.5f, pad_y));
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(pad, pad));
         for (int i = 0; i < (int)actions.size(); ++i) {
             ImGui::TableNextColumn();
             const ChaosScenario& a = actions[i];
@@ -946,24 +946,26 @@ void render_ui(AppState& st) {
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                              ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus |
                              ImGuiWindowFlags_NoNavFocus;
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    constexpr ImVec2 kRootPad(24.f, 20.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, kRootPad);
     ImGui::Begin("##root", nullptr, flags);
     ImGui::PopStyleVar();
+    ImGui::Dummy(ImVec2(0, 0.1f));
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22, 28));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22, 24));
     ImGui::BeginChild("sidebar_wrap", ImVec2(252, 0), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     render_sidebar(st);
     ImGui::EndChild();
     ImGui::PopStyleVar();
 
-    ImGui::SameLine(0, 16);
+    ImGui::SameLine(0, 20);
 
     // The content column spans the full window height (its bottom lines up with
     // the sidebar's operator card). Pages taller than that scroll inside here
     // rather than spilling past the bottom edge. Chaos Lab sizes itself to fit,
     // so it opts out of scrolling.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(34, 28));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28, 24));
     ImGuiWindowFlags content_flags = 0;
     if (st.page == 3) {
         content_flags |= ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
