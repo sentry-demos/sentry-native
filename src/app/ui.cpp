@@ -934,19 +934,6 @@ void page_settings(AppState& st) {
             }
             ImGui::PopFont();
             ImGui::PopStyleColor(4);
-
-            ImGui::Dummy(ImVec2(0, 16));
-            section("Offline demo");
-            ImGui::PushFont(theme::fonts().caption);
-            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
-            ImGui::PushTextWrapPos(0.0f);
-            ImGui::TextUnformatted(
-                "Hold/drain visuals live on Chaos Lab (Go Offline, envelope "
-                "badge, drain animation). That switch does not change this "
-                "consent setting.");
-            ImGui::PopTextWrapPos();
-            ImGui::PopStyleColor();
-            ImGui::PopFont();
         }
         end_card();
 
