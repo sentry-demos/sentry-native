@@ -7,12 +7,11 @@
 namespace empower::theme {
 
 namespace color {
-// Backgrounds
-constexpr ImVec4 bg         = ImVec4(0.122f, 0.086f, 0.200f, 1.00f); // #1F1633 Deep Purple
-constexpr ImVec4 bg_deep    = ImVec4(0.082f, 0.059f, 0.137f, 1.00f); // #150F23 Midnight Violet
-constexpr ImVec4 surface    = ImVec4(0.212f, 0.176f, 0.349f, 1.00f); // #362D59 Border / surface
-constexpr ImVec4 surface_hi = ImVec4(0.259f, 0.125f, 0.510f, 1.00f); // #422082 Deep Violet
-constexpr ImVec4 border     = ImVec4(0.212f, 0.176f, 0.349f, 1.00f); // #362D59
+// Backgrounds — custom dark ramp (ana/fix/ui)
+constexpr ImVec4 bg         = ImVec4(0.078f, 0.063f, 0.122f, 1.00f); // #14101F
+constexpr ImVec4 surface    = ImVec4(0.110f, 0.090f, 0.188f, 1.00f); // #1C1730 — cards
+constexpr ImVec4 surface_hi = ImVec4(0.145f, 0.118f, 0.235f, 1.00f); // #251E3C — widgets
+constexpr ImVec4 border     = ImVec4(0.180f, 0.153f, 0.278f, 1.00f); // #2E2747
 
 // Interactive
 constexpr ImVec4 accent     = ImVec4(0.416f, 0.373f, 0.757f, 1.00f); // #6A5FC1 Sentry Purple
