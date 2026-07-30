@@ -73,7 +73,7 @@ The build produces three binaries (each with the `sentry-crash` daemon copied ne
 | **External crash reporter** | Auto-wires the official [sentry-desktop-crash-reporter](https://github.com/getsentry/sentry-desktop-crash-reporter), themed for Empower Plant |
 | **User feedback** | Collected through the external crash reporter |
 | **Before-send hooks** | `before_send`, `before_send_log`, `before_send_metric`, and `before_transaction` — SDK callbacks invoked on each payload before upload; return the value to send (optionally modified) or `null` to drop it client-side for PII scrubbing, enrichment, or filtering logs, metrics, and transactions |
-| **Offline caching** | `SENTRY_CACHE_KEEP_ALWAYS` + Settings **Go Offline** toggle; soft events queue under `.sentry-native/cache/` and drain when back online |
+| **Offline caching** | `SENTRY_CACHE_KEEP_ALWAYS` + **Go Offline** and  **Revoke Consent** toggles; non-fatal events queue under `.sentry-native/cache/` and drain when back online / consent is restored
 
 | Telemetry | Chaos Lab |
 | --- | --- |
