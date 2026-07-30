@@ -18,6 +18,7 @@
 #  include "stb_image_write.h"
 #endif
 
+#include "app/icon/app_icon.h"
 #include "app/console_log.h"
 #include "app/fleet_model.h"
 #include "app/theme.h"
@@ -140,6 +141,7 @@ int main(int argc, char** argv) {
     }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
+    empower::set_app_icon(window);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
