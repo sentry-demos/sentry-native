@@ -20,8 +20,10 @@ void OfflineQueueMonitor::refresh() {
     using clock = std::chrono::steady_clock;
     const double now =
         std::chrono::duration<double>(clock::now().time_since_epoch()).count();
-    // Don't rescan every UI frame — a few times per second is enough for the badge.
-    constexpr double kInterval = 0.4;
+    // Don't rescan every UI frame, but stay fast enough that the drain animation
+    // can spawn an envelope per upload: the SDK sends serially at roughly this
+    // rate, and the cache dir is capped at cache_max_items, so a scan is cheap.
+    constexpr double kInterval = 0.15;
     if (now - s_scanned_at < kInterval) {
         return;
     }

@@ -589,37 +589,50 @@ ImVec4 severity_color(Severity s) {
     return theme::color::accent;
 }
 
-// Drain animation: envelopes fly up-right when the user goes back online.
-struct DrainAnim {
-    bool active = false;
-    float t = 0.f;       // 0 -> 1+
-    int from_count = 0;
-    ImVec2 origin{};
+// Drain animation. One envelope flies off per envelope that actually left the
+// on-disk queue, so the visual tracks real upload progress: the SDK drains the
+// retry outbox with one blocking request at a time on a single worker thread,
+// so a fixed-length sweep would finish long before the uploads do.
+struct DrainSprite {
+    float t = 0.f;    // <0 while staggered, 0 -> 1 in flight, then retired
+    float lane = 0.f; // lateral offset so a burst doesn't overlap exactly
 };
-DrainAnim g_drain;
+constexpr int kMaxDrainSprites = 8;
+DrainSprite g_drain[kMaxDrainSprites];
+int g_drain_count = 0;
+int g_last_queued = -1; // -1 = not observed yet, so the first frame never spawns
+ImVec2 g_drain_origin{};
+
+void spawn_drain_envelopes(int n) {
+    for (int i = 0; i < n && g_drain_count < kMaxDrainSprites; ++i) {
+        g_drain[g_drain_count].t = -0.06f * static_cast<float>(i);
+        g_drain[g_drain_count].lane = static_cast<float>((g_drain_count % 3) - 1);
+        ++g_drain_count;
+    }
+}
 
 void draw_drain_envelopes(ImDrawList* dl) {
-    if (!g_drain.active) return;
+    if (g_drain_count <= 0) return;
     const float dt = ImGui::GetIO().DeltaTime;
-    g_drain.t += dt / 0.85f; // ~0.85s flight
-    if (g_drain.t >= 1.15f) {
-        g_drain.active = false;
-        return;
-    }
-
-    const int n = std::min(g_drain.from_count, 6);
     ImFont* font = theme::has_icons() ? theme::fonts().h2 : theme::fonts().body;
     const char* glyph = theme::has_icons() ? ICON_ENVELOPE : "E";
-    for (int i = 0; i < n; ++i) {
-        const float phase = g_drain.t - i * 0.06f;
-        if (phase < 0.f || phase > 1.f) continue;
-        const float ease = phase * phase; // accelerate away
-        const float x = g_drain.origin.x + 40.f + ease * 220.f + i * 12.f;
-        const float y = g_drain.origin.y - ease * 120.f - i * 8.f;
-        const float alpha = (1.f - phase) * 0.95f;
-        ImVec4 col = with_alpha(theme::color::info, alpha);
-        dl->AddText(font, font->FontSize, ImVec2(x, y), u32(col), glyph);
+
+    int live = 0;
+    for (int i = 0; i < g_drain_count; ++i) {
+        DrainSprite s = g_drain[i];
+        s.t += dt / 0.85f; // ~0.85s flight
+        if (s.t >= 1.f) continue;
+        g_drain[live++] = s; // compact in place; live <= i, so nothing unread is clobbered
+        if (s.t < 0.f) continue;
+
+        const float ease = s.t * s.t; // accelerate away
+        const float x = g_drain_origin.x + 40.f + ease * 220.f;
+        const float y = g_drain_origin.y - ease * 120.f + s.lane * 10.f;
+        const float alpha = (1.f - s.t) * 0.95f;
+        dl->AddText(font, font->FontSize, ImVec2(x, y),
+                    u32(with_alpha(theme::color::info, alpha)), glyph);
     }
+    g_drain_count = live;
 }
 
 void chaos_offline_bar(AppState& st) {
@@ -652,14 +665,6 @@ void chaos_offline_bar(AppState& st) {
                 ? "Consent blocks uploads (Settings). Demo offline is also on."
                 : "Uploads blocked in Settings. Give consent there to drain.";
             break;
-    }
-
-    // Visual count: while draining, ease down from the pre-drain total.
-    int shown = queued;
-    if (g_drain.active) {
-        const float p = std::min(1.f, g_drain.t);
-        shown = static_cast<int>(std::lround(g_drain.from_count * (1.f - p)));
-        if (shown < queued) shown = queued;
     }
 
     if (begin_card("offline_bar", 64, ImVec2(16, 12))) {
@@ -701,15 +706,22 @@ void chaos_offline_bar(AppState& st) {
         const ImVec2 icon_pos(b0.x + pad_x, b0.y + (row_h - icon_sz) * 0.5f);
         dl->AddText(ifont, icon_sz, icon_pos, u32(env_col), envelope);
 
-        if (shown > 0) {
+        // Fly one envelope off for each one that actually left the disk queue.
+        g_drain_origin = ImVec2((b0.x + b1.x) * 0.5f, (b0.y + b1.y) * 0.5f);
+        if (uploading && g_last_queued > queued) {
+            spawn_drain_envelopes(g_last_queued - queued);
+        }
+        g_last_queued = queued;
+
+        if (queued > 0) {
             char count_buf[8];
-            if (shown > 99) std::snprintf(count_buf, sizeof(count_buf), "99+");
-            else std::snprintf(count_buf, sizeof(count_buf), "%d", shown);
+            if (queued > 99) std::snprintf(count_buf, sizeof(count_buf), "99+");
+            else std::snprintf(count_buf, sizeof(count_buf), "%d", queued);
 
             ImFont* nfont = theme::fonts().small;
             const float nsz = 11.f;
             ImVec2 ts = nfont->CalcTextSizeA(nsz, FLT_MAX, 0.f, count_buf);
-            const float cr = (shown > 9) ? 8.5f : 7.5f;
+            const float cr = (queued > 9) ? 8.5f : 7.5f;
             ImVec2 center(icon_pos.x + icon_sz - 1.f, icon_pos.y + 1.5f);
             dl->AddCircleFilled(center, cr, u32(theme::color::danger), 20);
             dl->AddText(nfont, nsz,
@@ -729,13 +741,6 @@ void chaos_offline_bar(AppState& st) {
         if (ImGui::Button(with_icon(demo_offline ? ICON_CHECK : ICON_BOLT, label).c_str(),
                           ImVec2(120.f, row_h))) {
             const bool next = !demo_offline;
-            // Drain animation only when coming online and consent still allows upload.
-            if (!next && consent && queued > 0) {
-                g_drain.active = true;
-                g_drain.t = 0.f;
-                g_drain.from_count = queued;
-                g_drain.origin = ImVec2((b0.x + b1.x) * 0.5f, (b0.y + b1.y) * 0.5f);
-            }
             SentryManager::set_offline(next);
             if (st.console) {
                 if (next) {
