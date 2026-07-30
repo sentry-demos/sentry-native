@@ -478,18 +478,20 @@ void log_feed(AppState& st) {
 
 void page_telemetry(AppState& st) {
     FleetModel& f = *st.fleet;
+    const float frame_ms = f.frame_time().rolling_avg(24);
+    const float backend_ms = f.net_latency().rolling_avg(24);
     char v0[16], v1[16], v2[16], v3[16];
-    std::snprintf(v0, sizeof(v0), "%.0f", f.frame_time().latest());
+    std::snprintf(v0, sizeof(v0), "%.0f", frame_ms);
     std::snprintf(v1, sizeof(v1), "%.0f%%", f.cpu_load().latest() * 100.0f);
-    std::snprintf(v2, sizeof(v2), "%.0f", f.net_latency().latest());
+    std::snprintf(v2, sizeof(v2), "%.0f", backend_ms);
     std::snprintf(v3, sizeof(v3), "%.0f%%", f.soil_avg().latest() * 100.0f);
 
     const float gauge_h = 150;
     if (ImGui::BeginTable("gauges", 4, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextRow();
-        ImGui::TableNextColumn(); gauge_card("frame time (ms)", f.frame_time().latest() / 33.0f, theme::color::accent, v0, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("frame time (ms)", frame_ms / 33.0f, theme::color::accent, v0, gauge_h);
         ImGui::TableNextColumn(); gauge_card("cpu load", f.cpu_load().latest(), theme::color::info, v1, gauge_h);
-        ImGui::TableNextColumn(); gauge_card("backend latency (ms)", f.net_latency().latest() / 90.0f, theme::color::warn, v2, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("backend latency (ms)", backend_ms / 90.0f, theme::color::warn, v2, gauge_h);
         ImGui::TableNextColumn(); gauge_card("soil moisture", f.soil_avg().latest(), theme::color::ok, v3, gauge_h);
         ImGui::EndTable();
     }
@@ -507,9 +509,9 @@ void page_telemetry(AppState& st) {
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
             char m0[16], m1[16], m2[16], m3[16], m4[16];
-            std::snprintf(m0, sizeof(m0), "%.1f ms", f.frame_time().latest());
+            std::snprintf(m0, sizeof(m0), "%.1f ms", frame_ms);
             std::snprintf(m1, sizeof(m1), "%.2f", f.cpu_load().latest());
-            std::snprintf(m2, sizeof(m2), "%.1f ms", f.net_latency().latest());
+            std::snprintf(m2, sizeof(m2), "%.1f ms", backend_ms);
             std::snprintf(m3, sizeof(m3), "%d", f.queue_depth());
             std::snprintf(m4, sizeof(m4), "%d", f.online_count());
             if (ImGui::BeginTable("mt", 3,
