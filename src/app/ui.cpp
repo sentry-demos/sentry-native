@@ -142,6 +142,64 @@ void center_cursor_x(float content_w) {
     if (avail > content_w) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - content_w) * 0.5f);
 }
 
+constexpr float kScrollLane = 12.f;
+
+// Overlay scrollbar in the host window's right padding band. Call before EndChild while
+// the scroll child is still the active window. Hides the built-in bar (NoScrollbar) so
+// layout width never changes; wheel scrolling still works on the child.
+void overlay_vscrollbar(float lane_w) {
+    const float scroll_max = ImGui::GetScrollMaxY();
+    if (scroll_max <= 0.f) return;
+
+    const ImVec2 wpos = ImGui::GetWindowPos();
+    const ImVec2 wsize = ImGui::GetWindowSize();
+    const float x0 = wpos.x + wsize.x;
+    const float x1 = x0 + lane_w;
+    const float y0 = wpos.y;
+    const float y1 = wpos.y + wsize.y;
+    const float track_h = y1 - y0;
+
+    const float grab_h = std::max(28.f, track_h * track_h / (track_h + scroll_max));
+    const float scroll_y = ImGui::GetScrollY();
+    const float grab_y0 = y0 + (track_h - grab_h) * (scroll_y / scroll_max);
+    const float grab_y1 = grab_y0 + grab_h;
+
+    ImGuiIO& io = ImGui::GetIO();
+    const bool track_hov = io.MousePos.x >= x0 && io.MousePos.x <= x1 &&
+                           io.MousePos.y >= y0 && io.MousePos.y <= y1;
+    const bool grab_hov = track_hov && io.MousePos.y >= grab_y0 && io.MousePos.y <= grab_y1;
+
+    ImDrawList* fg = ImGui::GetForegroundDrawList();
+    fg->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), u32(with_alpha(theme::color::border, 0.22f)), 3.f);
+    const ImU32 grab_col = u32(grab_hov || track_hov ? theme::color::accent : theme::color::border);
+    fg->AddRectFilled(ImVec2(x0 + 2.f, grab_y0), ImVec2(x1 - 2.f, grab_y1), grab_col, 3.f);
+
+    ImGui::PushID("overlay_vscroll");
+    ImGuiStorage* storage = ImGui::GetStateStorage();
+    const ImGuiID drag_id = ImGui::GetID("drag");
+    bool dragging = storage->GetBool(drag_id, false);
+
+    if (ImGui::IsMouseClicked(0) && track_hov) {
+        if (grab_hov) {
+            storage->SetBool(drag_id, true);
+            dragging = true;
+        } else {
+            const float t = (io.MousePos.y - y0 - grab_h * 0.5f) / std::max(1.f, track_h - grab_h);
+            ImGui::SetScrollY(std::clamp(t, 0.f, 1.f) * scroll_max);
+        }
+    }
+    if (dragging) {
+        if (ImGui::IsMouseDown(0)) {
+            const float scrollable = std::max(1.f, track_h - grab_h);
+            ImGui::SetScrollY(std::clamp(scroll_y + io.MouseDelta.y * scroll_max / scrollable,
+                                          0.f, scroll_max));
+        } else {
+            storage->SetBool(drag_id, false);
+        }
+    }
+    ImGui::PopID();
+}
+
 // ---- Sidebar -------------------------------------------------------------
 void brand_mark() {
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -277,6 +335,7 @@ void render_header(AppState& st) {
     float h1h = ImGui::GetTextLineHeight();
     ImGui::PopFont();
     heading(theme::fonts().h1, with_icon(kNav[st.page].icon, kNav[st.page].label).c_str());
+    ImVec2 after_title = ImGui::GetCursorScreenPos();
 
     // Right-aligned status pill, vertically centered on the title.
     float cy = tp.y + h1h * 0.5f;
@@ -305,6 +364,11 @@ void render_header(AppState& st) {
     dl->AddText(ImGui::GetFont(), fs, ImVec2(x, cy - fs * 0.5f), u32(theme::color::accent_hi), env);
     ImGui::PopFont();
 
+    ImGui::SetCursorScreenPos(a);
+    if (ImGui::InvisibleButton("##fleet_status", ImVec2(w, h))) st.page = 0;
+    if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+    ImGui::SetCursorScreenPos(after_title);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
     ImGui::TextUnformatted(kNav[st.page].subtitle);
     ImGui::PopStyleColor();
@@ -948,14 +1012,13 @@ void render_ui(AppState& st) {
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                              ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus |
                              ImGuiWindowFlags_NoNavFocus;
-    constexpr ImVec2 kRootPad(24.f, 20.f);
+    constexpr ImVec2 kRootPad(5.f, 15.f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, kRootPad);
     ImGui::Begin("##root", nullptr, flags);
     ImGui::PopStyleVar();
-    ImGui::Dummy(ImVec2(0, 0.1f));
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22, 24));
-    ImGui::BeginChild("sidebar_wrap", ImVec2(252, 0), false,
+    ImGui::BeginChild("sidebar_wrap", ImVec2(252, 0), ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     render_sidebar(st);
     ImGui::EndChild();
@@ -963,17 +1026,19 @@ void render_ui(AppState& st) {
 
     ImGui::SameLine(0, 20);
 
-    // The content column spans the full window height (its bottom lines up with
-    // the sidebar's operator card). Pages taller than that scroll inside here
-    // rather than spilling past the bottom edge. Chaos Lab sizes itself to fit,
-    // so it opts out of scrolling.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28, 24));
-    ImGuiWindowFlags content_flags = 0;
-    if (st.page == 3) {
-        content_flags |= ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-    }
-    ImGui::BeginChild("content", ImVec2(0, 0), false, content_flags);
+    // Header stays fixed; page body scrolls below it. AlwaysUseWindowPadding reserves
+    // top/bottom inset so widgets don't draw into the padding band. Right padding (15)
+    // is the overlay scrollbar lane (kScrollLane).
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15, 10));
+    ImGui::BeginChild("content", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding,
+                      ImGuiWindowFlags_NoScrollbar);
     render_header(st);
+
+    ImGuiWindowFlags scroll_flags = ImGuiWindowFlags_NoScrollbar;
+    if (st.page == 3) {
+        scroll_flags |= ImGuiWindowFlags_NoScrollWithMouse;
+    }
+    ImGui::BeginChild("content_scroll", ImVec2(0, 0), ImGuiChildFlags_None, scroll_flags);
     switch (st.page) {
         case 0: page_fleet(st); break;
         case 1: page_telemetry(st); break;
@@ -981,6 +1046,8 @@ void render_ui(AppState& st) {
         case 3: page_chaos(st); break;
         case 4: page_settings(st); break;
     }
+    if (st.page != 3) overlay_vscrollbar(kScrollLane);
+    ImGui::EndChild();
     ImGui::EndChild();
     ImGui::PopStyleVar();
 
