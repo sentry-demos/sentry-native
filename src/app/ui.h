@@ -19,6 +19,7 @@ struct AppState {
     std::string release;
     std::string dsn_host;       // masked ingest host, for the Settings page
     bool dsn_configured = false;
+    std::string sentry_project_url; // SENTRY_PROJECT_URL — clickable link in Settings
 
     // Navigation.
     int page = 0;               // index into the sidebar nav

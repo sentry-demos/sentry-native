@@ -895,6 +895,14 @@ void kv_row(const char* k, const char* v) {
     ImGui::TextUnformatted(v);
 }
 
+void kv_link_row(const char* k, const char* label, const char* url) {
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::TextUnformatted(k);
+    ImGui::PopStyleColor();
+    ImGui::SameLine(190);
+    ImGui::TextLinkOpenURL(label, url);
+}
+
 void section(const char* title) {
     heading(theme::fonts().h2, title);
     ImGui::Dummy(ImVec2(0, 6));
@@ -934,6 +942,11 @@ void page_settings(AppState& st) {
             kv_row("Environment", st.environment.c_str());
             kv_row("Release", st.release.c_str());
             kv_row("Ingest host", st.dsn_configured ? st.dsn_host.c_str() : "(SENTRY_DSN not set)");
+            if (!st.sentry_project_url.empty()) {
+                kv_link_row("Sentry project", "open in Sentry", st.sentry_project_url.c_str());
+            } else if (st.dsn_configured) {
+                kv_row("Sentry project", "(could not parse project id from DSN)");
+            }
             kv_row("Backend", "flask.empower-plant.com");
             ImGui::Dummy(ImVec2(0, 16));
 

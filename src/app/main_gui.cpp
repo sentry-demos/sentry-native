@@ -42,6 +42,33 @@ std::string dsn_host(const std::string& dsn) {
     return dsn.substr(at + 1, slash == std::string::npos ? std::string::npos : slash - at - 1);
 }
 
+std::string dsn_project_id(const std::string& dsn) {
+    const std::string host = dsn_host(dsn);
+    if (host.empty()) return "";
+    const auto at = dsn.find('@');
+    const auto slash = dsn.find('/', at);
+    if (slash == std::string::npos || slash + 1 >= dsn.size()) return "";
+    std::string id = dsn.substr(slash + 1);
+    const auto q = id.find('?');
+    if (q != std::string::npos) id.resize(q);
+    return id;
+}
+
+// Project ids are globally unique on Sentry SaaS — enough for ?project= in the UI.
+// SENTRY_PROJECT_URL overrides when you want an exact link (org subdomain, query params).
+std::string project_url_from_dsn(const std::string& dsn) {
+    const std::string project = dsn_project_id(dsn);
+    if (project.empty()) return "";
+    const std::string host = dsn_host(dsn);
+    if (host.find("sentry.io") != std::string::npos) {
+        return "https://sentry.io/issues/?project=" + project;
+    }
+    if (!host.empty()) {
+        return "https://" + host + "/issues/?project=" + project;
+    }
+    return "";
+}
+
 void glfw_error(int code, const char* desc) {
     std::fprintf(stderr, "glfw error %d: %s\n", code, desc);
 }
@@ -181,6 +208,10 @@ int main(int argc, char** argv) {
     state.release = empower::SentryManager::release();
     state.dsn_host = dsn_host(dsn);
     state.dsn_configured = !dsn.empty();
+    state.sentry_project_url = env_or("SENTRY_PROJECT_URL", "");
+    if (state.sentry_project_url.empty()) {
+        state.sentry_project_url = project_url_from_dsn(dsn);
+    }
     state.page = start_page;
     state.on_chaos = [&console](const std::string& id) {
         empower::trigger(id, &console);

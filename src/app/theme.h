@@ -12,6 +12,7 @@ constexpr ImVec4 surface_hi= ImVec4(0.145f, 0.118f, 0.235f, 1.00f); // #251E3C
 constexpr ImVec4 border    = ImVec4(0.180f, 0.153f, 0.278f, 1.00f); // #2E2747
 constexpr ImVec4 accent    = ImVec4(0.545f, 0.361f, 0.965f, 1.00f); // #8B5CF6
 constexpr ImVec4 accent_hi = ImVec4(0.655f, 0.545f, 0.980f, 1.00f); // #A78BFA
+constexpr ImVec4 sentry    = ImVec4(0.980f, 0.498f, 0.667f, 1.00f); // #FA7FAA — Sentry pink
 constexpr ImVec4 text      = ImVec4(0.941f, 0.933f, 0.969f, 1.00f); // #F0EEF7
 constexpr ImVec4 text_dim  = ImVec4(0.678f, 0.651f, 0.780f, 1.00f); // #ADA6C7
 constexpr ImVec4 text_faint= ImVec4(0.451f, 0.431f, 0.545f, 1.00f); // #736E8B
