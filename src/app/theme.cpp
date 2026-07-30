@@ -109,9 +109,9 @@ void apply() {
     c[ImGuiCol_TextDisabled] = color::text_faint;
     c[ImGuiCol_TextLink] = color::sentry;
 
-    c[ImGuiCol_FrameBg] = color::surface_hi;
-    c[ImGuiCol_FrameBgHovered] = ImVec4(0.180f, 0.149f, 0.286f, 1.0f);
-    c[ImGuiCol_FrameBgActive] = ImVec4(0.212f, 0.176f, 0.329f, 1.0f);
+    c[ImGuiCol_FrameBg] = color::bg_deep;
+    c[ImGuiCol_FrameBgHovered] = color::surface;
+    c[ImGuiCol_FrameBgActive] = color::surface_hi;
 
     c[ImGuiCol_Button] = color::surface_hi;
     c[ImGuiCol_ButtonHovered] = color::border;
