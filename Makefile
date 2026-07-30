@@ -3,7 +3,7 @@
 BUILD ?= build
 BUILD_TYPE ?= RelWithDebInfo
 
-.PHONY: all build run headless smoke crash-reporter clean
+.PHONY: all build run headless smoke test-offline crash-reporter clean
 
 all: build
 
@@ -22,6 +22,10 @@ headless: build
 # Connectivity smoke test.
 smoke: build
 	./$(BUILD)/empower-smoke
+
+# Assert Go Offline caches message events and hard crashes under database/cache/.
+test-offline: build
+	./$(BUILD)/empower-test-offline
 
 # Download + theme the official external crash reporter into the build dir.
 crash-reporter: build

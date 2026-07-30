@@ -1,4 +1,5 @@
 #include "core/sentry_manager.h"
+#include "core/offline_queue_monitor.h"
 #include "core/platform.h"
 
 #include <cstdlib>
@@ -27,6 +28,8 @@
 namespace empower {
 
 bool SentryManager::s_initialized = false;
+bool SentryManager::s_consent_given = true;
+bool SentryManager::s_offline = false;
 std::string SentryManager::s_release;
 
 namespace {
@@ -163,6 +166,8 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_environment(options, config.environment.c_str());
     sentry_options_set_database_path(options, config.database_path.c_str());
     sentry_options_set_debug(options, config.debug ? 1 : 0);
+    // Point the UI badge watcher at the same folder the SDK will use.
+    OfflineQueueMonitor::configure(config.database_path);
 
     // The native backend launches an out-of-process crash daemon (sentry-crash),
     // which must be locatable. Default to the daemon copied beside the binary.
@@ -213,6 +218,17 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_attach_screenshot(options, 1);
 #endif
 
+    // --- Offline cache / retry ---------------------------------------------
+    // Fixed demo defaults (not SentryConfig knobs): keep envelopes on disk,
+    // retry failed/blocked sends, and gate uploads via user consent so
+    // Settings consent and Chaos Lab demo-offline can block without re-init.
+    sentry_options_set_cache_keep(options, SENTRY_CACHE_KEEP_ALWAYS);
+    sentry_options_set_cache_max_items(options, 30);
+    sentry_options_set_cache_max_size(options, 16 * 1024 * 1024); // 16 MiB
+    sentry_options_set_cache_max_age(options, 5 * 24 * 60 * 60);  // 5 days
+    sentry_options_set_http_retry(options, 1);
+    sentry_options_set_require_user_consent(options, 1);
+
     // --- External crash reporter (official sentry-desktop-crash-reporter) --
     // Only for the interactive GUI: when set, the SDK hands the crash to this
     // separate app to submit (with a user-feedback dialog). A headless/CI binary
@@ -234,6 +250,11 @@ bool SentryManager::init(const SentryConfig& config) {
         return false;
     }
 
+    // Start with uploads allowed: consent given, demo offline off.
+    sentry_user_consent_give();
+    s_consent_given = true;
+    s_offline = false;
+
     s_initialized = true;
     apply_global_enrichment(config, s_release);
     return true;
@@ -245,6 +266,8 @@ void SentryManager::shutdown() {
     }
     sentry_close();
     s_initialized = false;
+    s_consent_given = true;
+    s_offline = false;
 }
 
 void SentryManager::app_hang_heartbeat() {
@@ -252,6 +275,40 @@ void SentryManager::app_hang_heartbeat() {
         sentry_app_hang_heartbeat();
     }
 }
+
+void SentryManager::sync_upload_gate() {
+    if (!s_initialized) {
+        return;
+    }
+    // One SDK consent gate, two app flags.
+    if (s_consent_given && !s_offline) {
+        sentry_user_consent_give();
+    } else {
+        sentry_user_consent_revoke();
+    }
+}
+
+void SentryManager::set_user_consent(bool given) {
+    if (!s_initialized || s_consent_given == given) {
+        return;
+    }
+    s_consent_given = given;
+    sync_upload_gate();
+}
+
+bool SentryManager::has_user_consent() {
+    return s_initialized && s_consent_given;
+}
+
+void SentryManager::set_offline(bool offline) {
+    if (!s_initialized || s_offline == offline) {
+        return;
+    }
+    s_offline = offline;
+    sync_upload_gate();
+}
+
+bool SentryManager::is_offline() { return s_initialized && s_offline; }
 
 const std::string& SentryManager::release() { return s_release; }
 

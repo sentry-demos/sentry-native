@@ -5,6 +5,8 @@
 #include "app/icons.h"
 #include "app/theme.h"
 #include "chaos/chaos.h"
+#include "core/sentry_manager.h"
+#include "core/offline_queue_monitor.h"
 
 #include "imgui.h"
 
@@ -24,7 +26,7 @@ const Nav kNav[] = {
     {ICON_SEEDLING, "Fleet", "Live status across every Empower Plant device"},
     {ICON_CHART, "Telemetry", "Metrics and logs streaming to Sentry"},
     {ICON_PIPELINE, "Pipelines", "Background jobs processing device data"},
-    {ICON_BUG, "Chaos Lab", "Trigger faults and ship them to Sentry"},
+    {ICON_BUG, "Chaos Lab", "Trigger faults - Go Offline to queue envelopes locally"},
     {ICON_GEAR, "Settings", "SDK configuration and enabled features"},
 };
 
@@ -114,9 +116,9 @@ void meter_row(const char* icon, const char* label, float v, ImVec4 col) {
     ImGui::Dummy(ImVec2(full, row_h));
 }
 
-bool begin_card(const char* id, float height = 0.0f) {
+bool begin_card(const char* id, float height = 0.0f, ImVec2 pad = ImVec2(16, 14)) {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::color::surface);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16, 14));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, pad);
     ImGuiChildFlags cf = ImGuiChildFlags_Borders;
     ImVec2 size(-FLT_MIN, height);
     if (height <= 0.0f) { cf |= ImGuiChildFlags_AutoResizeY; size.y = 0; }
@@ -587,16 +589,205 @@ ImVec4 severity_color(Severity s) {
     return theme::color::accent;
 }
 
+// Drain animation. One envelope flies off per envelope that actually left the
+// on-disk queue, so the visual tracks real upload progress: the SDK drains the
+// retry outbox with one blocking request at a time on a single worker thread,
+// so a fixed-length sweep would finish long before the uploads do.
+struct DrainSprite {
+    float t = 0.f;    // <0 while staggered, 0 -> 1 in flight, then retired
+    float lane = 0.f; // lateral offset so a burst doesn't overlap exactly
+};
+constexpr int kMaxDrainSprites = 8;
+DrainSprite g_drain[kMaxDrainSprites];
+int g_drain_count = 0;
+int g_last_queued = -1; // -1 = not observed yet, so the first frame never spawns
+ImVec2 g_drain_origin{};
+
+void spawn_drain_envelopes(int n) {
+    for (int i = 0; i < n && g_drain_count < kMaxDrainSprites; ++i) {
+        g_drain[g_drain_count].t = -0.06f * static_cast<float>(i);
+        g_drain[g_drain_count].lane = static_cast<float>((g_drain_count % 3) - 1);
+        ++g_drain_count;
+    }
+}
+
+void draw_drain_envelopes(ImDrawList* dl) {
+    if (g_drain_count <= 0) return;
+    const float dt = ImGui::GetIO().DeltaTime;
+    ImFont* font = theme::has_icons() ? theme::fonts().h2 : theme::fonts().body;
+    const char* glyph = theme::has_icons() ? ICON_ENVELOPE : "E";
+
+    int live = 0;
+    for (int i = 0; i < g_drain_count; ++i) {
+        DrainSprite s = g_drain[i];
+        s.t += dt / 0.85f; // ~0.85s flight
+        if (s.t >= 1.f) continue;
+        g_drain[live++] = s; // compact in place; live <= i, so nothing unread is clobbered
+        if (s.t < 0.f) continue;
+
+        const float ease = s.t * s.t; // accelerate away
+        const float x = g_drain_origin.x + 40.f + ease * 220.f;
+        const float y = g_drain_origin.y - ease * 120.f + s.lane * 10.f;
+        const float alpha = (1.f - s.t) * 0.95f;
+        dl->AddText(font, font->FontSize, ImVec2(x, y),
+                    u32(with_alpha(theme::color::info, alpha)), glyph);
+    }
+    g_drain_count = live;
+}
+
+void chaos_offline_bar(AppState& st) {
+    const bool demo_offline = SentryManager::is_offline();
+    const bool consent = SentryManager::has_user_consent();
+    const bool uploading = consent && !demo_offline;
+    const int queued = static_cast<int>(OfflineQueueMonitor::queued_count());
+
+    // Three visible states — consent revoked always wins the title.
+    enum class Gate { Online, DemoOffline, ConsentRevoked };
+    Gate gate = Gate::Online;
+    if (!consent) gate = Gate::ConsentRevoked;
+    else if (demo_offline) gate = Gate::DemoOffline;
+
+    ImVec4 status_col = theme::color::ok;
+    const char* title = "Online - uploading";
+    const char* hint = "Toggle Offline, trigger non-fatal faults, then come back online to flush them.";
+    switch (gate) {
+        case Gate::Online:
+            break;
+        case Gate::DemoOffline:
+            status_col = theme::color::warn;
+            title = "Offline - caching envelopes";
+            hint = "Demo offline. Trigger non-fatal faults to fill the local queue.";
+            break;
+        case Gate::ConsentRevoked:
+            status_col = theme::color::danger;
+            title = "Consent revoked - caching";
+            hint = demo_offline
+                ? "Consent blocks uploads (Settings). Demo offline is also on."
+                : "Uploads blocked in Settings. Give consent there to drain.";
+            break;
+    }
+
+    if (begin_card("offline_bar", 64, ImVec2(16, 12))) {
+        status_dot(status_col);
+        ImGui::SameLine(0, 8);
+        ImGui::BeginGroup();
+        ImGui::PushFont(theme::fonts().h2);
+        ImGui::PushStyleColor(ImGuiCol_Text, status_col);
+        ImGui::TextUnformatted(title);
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+        ImGui::TextUnformatted(hint);
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+        ImGui::EndGroup();
+
+        // Right: envelope badge + Go Offline / Go Online (vertically centered).
+        const float right_w = 180.f;
+        const float row_h = ImGui::GetFrameHeight();
+        const float y0 = ImGui::GetWindowPos().y + ImGui::GetStyle().WindowPadding.y;
+        const float y_mid = y0 + (ImGui::GetWindowHeight() - 2.f * ImGui::GetStyle().WindowPadding.y
+                                  - row_h) * 0.5f;
+        ImGui::SetCursorScreenPos(ImVec2(
+            ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - right_w, y_mid));
+
+        ImVec2 badge_min = ImGui::GetCursorScreenPos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImFont* ifont = theme::fonts().body;
+        const char* envelope = theme::has_icons() ? ICON_ENVELOPE : "E";
+        const float icon_sz = theme::fonts().body->FontSize + 2.f;
+        const float pad_x = 4.f;
+        const float hit_w = pad_x + icon_sz + 12.f;
+        ImVec2 b0 = badge_min;
+        ImVec2 b1(b0.x + hit_w, b0.y + row_h);
+
+        const ImVec4 env_col = uploading ? theme::color::text_dim : status_col;
+        const ImVec2 icon_pos(b0.x + pad_x, b0.y + (row_h - icon_sz) * 0.5f);
+        dl->AddText(ifont, icon_sz, icon_pos, u32(env_col), envelope);
+
+        // Fly one envelope off for each one that actually left the disk queue.
+        g_drain_origin = ImVec2((b0.x + b1.x) * 0.5f, (b0.y + b1.y) * 0.5f);
+        if (uploading && g_last_queued > queued) {
+            spawn_drain_envelopes(g_last_queued - queued);
+        }
+        g_last_queued = queued;
+
+        if (queued > 0) {
+            char count_buf[8];
+            if (queued > 99) std::snprintf(count_buf, sizeof(count_buf), "99+");
+            else std::snprintf(count_buf, sizeof(count_buf), "%d", queued);
+
+            ImFont* nfont = theme::fonts().small;
+            const float nsz = 11.f;
+            ImVec2 ts = nfont->CalcTextSizeA(nsz, FLT_MAX, 0.f, count_buf);
+            const float cr = (queued > 9) ? 8.5f : 7.5f;
+            ImVec2 center(icon_pos.x + icon_sz - 1.f, icon_pos.y + 1.5f);
+            dl->AddCircleFilled(center, cr, u32(theme::color::danger), 20);
+            dl->AddText(nfont, nsz,
+                        ImVec2(center.x - ts.x * 0.5f, center.y - ts.y * 0.5f - 0.5f),
+                        u32(ImVec4(1.f, 1.f, 1.f, 1.f)), count_buf);
+        }
+
+        ImGui::Dummy(ImVec2(hit_w, row_h));
+        ImGui::SameLine(0, 10);
+
+        ImVec4 btn = demo_offline ? theme::color::ok : theme::color::warn;
+        const char* label = demo_offline ? "Go Online" : "Go Offline";
+        ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(btn, 0.18f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(btn, 0.32f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, btn);
+        ImGui::PushStyleColor(ImGuiCol_Text, btn);
+        if (ImGui::Button(with_icon(demo_offline ? ICON_CHECK : ICON_BOLT, label).c_str(),
+                          ImVec2(120.f, row_h))) {
+            const bool next = !demo_offline;
+            SentryManager::set_offline(next);
+            if (st.console) {
+                if (next) {
+                    st.console->push(ConsoleLog::Level::Warn, "sentry",
+                                     "Go Offline: demo pause - caching envelopes");
+                } else if (!consent) {
+                    st.console->push(ConsoleLog::Level::Warn, "sentry",
+                                     "Go Online: demo cleared, but consent still revoked in Settings");
+                } else {
+                    st.console->push(ConsoleLog::Level::Info, "sentry",
+                                     "Go Online: draining cached envelopes to Sentry");
+                }
+            }
+        }
+        ImGui::PopStyleColor(4);
+    }
+    end_card();
+
+    // if drawn before end_card, envelope icons get clipped
+    draw_drain_envelopes(ImGui::GetForegroundDrawList());
+
+    ImGui::Dummy(ImVec2(0, 6));
+}
+
 void page_chaos(AppState& st) {
+    chaos_offline_bar(st);
+
     const auto& actions = scenarios();
     int cols = column_count(258, 4);
-    if (ImGui::BeginTable("chaos", cols, ImGuiTableFlags_SizingStretchSame)) {
+    const int rows = std::max(1, (static_cast<int>(actions.size()) + cols - 1) / cols);
+
+    // Fit the grid into the remaining viewport height (no page scroll).
+    const float gap = 8.f;
+    const float avail = ImGui::GetContentRegionAvail().y;
+    const float pad_y = 3.f;
+    float card_h = (avail - pad_y * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
+    if (card_h > 150.f) card_h = 150.f;
+
+    if (ImGui::BeginTable("chaos", cols,
+                          ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX)) {
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(gap * 0.5f, pad_y));
         for (int i = 0; i < (int)actions.size(); ++i) {
             ImGui::TableNextColumn();
             const ChaosScenario& a = actions[i];
             ImVec4 col = severity_color(a.severity);
             ImGui::PushID(a.id);
-            if (begin_card("c", 150)) {
+            if (begin_card("c", card_h, ImVec2(14, 10))) {
                 heading(theme::fonts().h2, a.label, col);
                 ImGui::Dummy(ImVec2(0, 1));
                 ImGui::PushFont(theme::fonts().small);
@@ -607,22 +798,24 @@ void page_chaos(AppState& st) {
                 ImGui::PopStyleColor();
                 ImGui::PopFont();
 
-                float bh = ImGui::GetFrameHeight() + 4;
-                ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - 16);
+                float bh = ImGui::GetFrameHeight() + 2;
+                ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - 12);
                 ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
                 ImGui::PushStyleColor(ImGuiCol_Text, col);
                 ImGui::PushFont(theme::fonts().h2);
                 if (ImGui::Button(with_icon(ICON_BOLT, "Trigger fault").c_str(),
-                                  ImVec2(-FLT_MIN, bh)) && st.on_chaos)
+                                  ImVec2(-FLT_MIN, bh)) && st.on_chaos) {
                     st.on_chaos(a.id);
+                }
                 ImGui::PopFont();
                 ImGui::PopStyleColor(4);
             }
             end_card();
             ImGui::PopID();
         }
+        ImGui::PopStyleVar();
         ImGui::EndTable();
     }
 }
@@ -668,12 +861,62 @@ void page_settings(AppState& st) {
             kv_row("Crash backend", "native (out-of-process)");
             kv_row("Minidump mode", "smart + client stackwalk");
             kv_row("Upload mode", "async");
+            kv_row("Cache keep", "always");
+            kv_row("HTTP retry", "enabled");
             ImGui::Dummy(ImVec2(0, 16));
             section("Connection");
             kv_row("Environment", st.environment.c_str());
             kv_row("Release", st.release.c_str());
             kv_row("Ingest host", st.dsn_configured ? st.dsn_host.c_str() : "(SENTRY_DSN not set)");
             kv_row("Backend", "flask.empower-plant.com");
+            ImGui::Dummy(ImVec2(0, 16));
+
+            // GDPR-style consent (Settings) — separate from Chaos Lab Go Offline.
+            section("User consent");
+            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(
+                "Upload consent for Sentry. Revoking caches new envelopes on "
+                "disk until consent is given again. Chaos Lab's Go Offline is a "
+                "separate demo switch; both must allow uploads for sending.");
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+            ImGui::PopFont();
+            ImGui::Dummy(ImVec2(0, 8));
+
+            const bool consent = SentryManager::has_user_consent();
+            ImVec4 consent_col = consent ? theme::color::ok : theme::color::warn;
+            status_dot(consent_col);
+            ImGui::SameLine(0, 8);
+            chip(consent ? "CONSENT GIVEN" : "CONSENT REVOKED", consent_col);
+            ImGui::SameLine(0, 12);
+            if (SentryManager::is_offline()) {
+                chip("Chaos Lab offline", theme::color::text_faint);
+            }
+
+            ImGui::Dummy(ImVec2(0, 10));
+            ImVec4 btn = consent ? theme::color::warn : theme::color::ok;
+            const char* label = consent ? "Revoke consent" : "Give consent";
+            ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(btn, 0.18f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(btn, 0.32f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, btn);
+            ImGui::PushStyleColor(ImGuiCol_Text, btn);
+            ImGui::PushFont(theme::fonts().h2);
+            if (ImGui::Button(with_icon(consent ? ICON_BOLT : ICON_CHECK, label).c_str(),
+                              ImVec2(-FLT_MIN, ImGui::GetFrameHeight() + 8))) {
+                const bool next = !consent;
+                SentryManager::set_user_consent(next);
+                if (st.console) {
+                    st.console->push(
+                        next ? ConsoleLog::Level::Info : ConsoleLog::Level::Warn, "sentry",
+                        next ? "User consent given - uploads allowed (if not demo-offline)"
+                             : "User consent revoked - caching envelopes until given");
+                }
+            }
+            ImGui::PopFont();
+            ImGui::PopStyleColor(4);
+
         }
         end_card();
 
@@ -684,7 +927,8 @@ void page_settings(AppState& st) {
             const char* feats[] = {
                 "Performance tracing", "Distributed tracing", "Structured logs",
                 "Metrics", "Sessions / release health", "App-hang detection",
-                "Screenshots", "External crash reporter"};
+                "Screenshots", "External crash reporter",
+                "User consent", "Offline cache keep", "HTTP retry / drain"};
             for (const char* fe : feats) feature_row(fe);
             ImGui::PopStyleVar();
         }
@@ -717,9 +961,14 @@ void render_ui(AppState& st) {
 
     // The content column spans the full window height (its bottom lines up with
     // the sidebar's operator card). Pages taller than that scroll inside here
-    // rather than spilling past the bottom edge.
+    // rather than spilling past the bottom edge. Chaos Lab sizes itself to fit,
+    // so it opts out of scrolling.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(34, 28));
-    ImGui::BeginChild("content", ImVec2(0, 0), false);
+    ImGuiWindowFlags content_flags = 0;
+    if (st.page == 3) {
+        content_flags |= ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    }
+    ImGui::BeginChild("content", ImVec2(0, 0), false, content_flags);
     render_header(st);
     switch (st.page) {
         case 0: page_fleet(st); break;

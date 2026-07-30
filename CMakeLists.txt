@@ -68,6 +68,7 @@ FetchContent_MakeAvailable(sentry)
 # ---------------------------------------------------------------------------
 add_library(empower_core STATIC
     src/core/sentry_manager.cpp
+    src/core/offline_queue_monitor.cpp
     src/core/platform.cpp
     src/core/backend_client.cpp
     src/core/command_server.cpp
@@ -119,6 +120,14 @@ function(empower_codesign target)
             VERBATIM)
     endif()
 endfunction()
+
+# ---------------------------------------------------------------------------
+# Offline-cache test — Go Offline must queue soft events and crashes on disk
+# ---------------------------------------------------------------------------
+add_executable(empower-test-offline test/offline_cache_test.cpp)
+target_link_libraries(empower-test-offline PRIVATE empower_core)
+empower_bundle_daemon(empower-test-offline)
+empower_codesign(empower-test-offline)
 
 # ---------------------------------------------------------------------------
 # Connectivity smoke test — exercises the SDK + native backend end to end

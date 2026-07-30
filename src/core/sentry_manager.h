@@ -54,13 +54,27 @@ public:
     // Call once per frame from the UI loop.
     static void app_hang_heartbeat();
 
+    // Demo "Go Offline": block uploads and queue envelopes in the local cache.
+    // Toggle back to drain via HTTP retry. Owned here so callers don't need to
+    // know about user-consent internals.
+    static void set_offline(bool offline);
+    static bool is_offline();
+    // GDPR-style upload consent (Settings). Independent of Chaos Lab Go Offline.
+    // SDK uploads only when consent is given AND demo offline is off.
+    static void set_user_consent(bool given);
+    static bool has_user_consent();
+
     // The release string actually used (resolved from config/env/built-in).
     static const std::string& release();
 
     static bool initialized();
 
 private:
+    static void sync_upload_gate();
+
     static bool s_initialized;
+    static bool s_consent_given;
+    static bool s_offline;
     static std::string s_release;
 };
 
