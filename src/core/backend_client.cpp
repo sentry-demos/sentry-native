@@ -174,7 +174,7 @@ BackendResult checkout(const std::string& base_url, ConsoleLog* console) {
     // METRIC: checkout.requests — HTTP checkout attempts, grouped by status_code.
     sentry_metrics_count("checkout.requests", 1, metric_attrs);
     // METRIC: checkout.duration — end-to-end POST latency in ms, grouped by status_code.
-    sentry_metrics_distribution("checkout.duration", elapsed_ms, "millisecond", metric_attrs);
+    sentry_metrics_distribution("checkout.duration", elapsed_ms, SENTRY_UNIT_MILLISECOND, metric_attrs);
 
     return result;
 }

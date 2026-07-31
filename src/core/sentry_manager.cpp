@@ -210,11 +210,6 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_enable_app_hang_tracking(options, 1);
     sentry_options_set_app_hang_timeout(options, config.app_hang_timeout_ms);
 
-    // --- Large attachments (experimental TUS upload) -----------------------
-    // Opt-in for files >= 100 MiB; needs projects:relay-upload-endpoint on the
-    // Sentry project. Uncomment to try with a file attachment in app-hang:
-    // sentry_options_set_enable_large_attachments(options, 1);
-
     // --- Screenshots (Windows only) ----------------------------------------
 #ifdef _WIN32
     sentry_options_set_attach_screenshot(options, 1);

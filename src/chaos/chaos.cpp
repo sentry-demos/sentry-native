@@ -72,14 +72,6 @@ void arm(const char* id, const char* transaction, const char* opening,
     if (console) console->push(level, "chaos", opening);
 }
 
-// Never runs after a crash, but shows capture_event_with_scope cannot label the crash.
-void dead_capture_with_local_scope(sentry_scope_t* scope) {
-    sentry_value_t ev = sentry_value_new_message_event(
-        SENTRY_LEVEL_DEBUG, "chaos",
-        "unreachable — local scope is never applied to crash events");
-    sentry_capture_event_with_scope(ev, scope);
-}
-
 // ----- null dereference ---------------------------------------------------
 EMPOWER_NOINLINE void read_device_register(volatile int* reg) {
     breadcrumb("driver", "reading device status register");
@@ -92,7 +84,6 @@ void scenario_null_deref() {
     sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     int* reg = nullptr;
     read_device_register(reg);
-    dead_capture_with_local_scope(scope);
 }
 
 // ----- use-after-free across threads --------------------------------------
@@ -133,7 +124,6 @@ void scenario_use_after_free() {
     unmap_buffer(buffer, n);
     std::thread reader(sample_freed_buffer, buffer);
     reader.join();
-    dead_capture_with_local_scope(scope);
 }
 
 // ----- stack overflow -----------------------------------------------------
@@ -150,7 +140,6 @@ void scenario_stack_overflow() {
     breadcrumb("scheduler", "resolving device dependency graph");
     volatile int sink = resolve_dependencies(0);
     (void)sink;
-    dead_capture_with_local_scope(scope);
 }
 
 // ----- integer divide by zero ---------------------------------------------
@@ -169,7 +158,6 @@ void scenario_divide_by_zero() {
     sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     volatile int result = compute_yield_per_plant(0);
     (void)result;
-    dead_capture_with_local_scope(scope);
 }
 
 // ----- heap corruption ----------------------------------------------------
@@ -186,7 +174,6 @@ void scenario_heap_corruption() {
     decode_sensor_frame(buf, 4096);
     breadcrumb("parser", "releasing decoded frame buffer");
     std::free(buf); // allocator detects the corruption and aborts
-    dead_capture_with_local_scope(scope);
 }
 
 // ----- assertion / abort --------------------------------------------------
@@ -208,7 +195,6 @@ void scenario_assert_fail() {
     sentry_scope_t* scope = sentry_local_scope_new();
     sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     verify_firmware_signature("0.0.0-tampered");
-    dead_capture_with_local_scope(scope);
 }
 
 // ----- GPU stress / device lost -------------------------------------------
@@ -228,7 +214,6 @@ void scenario_gpu_stress() {
     breadcrumb("gpu", "render thread overloaded - device lost");
     float* vertex_buffer = nullptr;
     submit_render_commands(vertex_buffer);
-    dead_capture_with_local_scope(scope);
 }
 
 // ----- the convoluted chain (corruption now, crash later, elsewhere) ------
@@ -279,7 +264,6 @@ void scenario_convoluted() {
     // callback and crashes far from the actual bug.
     breadcrumb("sensor", "new sensor sample arrived for device");
     dispatch_sensor_sample(cal, 42);
-    dead_capture_with_local_scope(scope);
 }
 
 // ----- app hang (bounded, so a live demo recovers) ------------------------
@@ -290,6 +274,7 @@ void scenario_convoluted() {
 void scenario_app_hang(ConsoleLog* console) {
     sentry_set_tag("hang.subsystem", "telemetry-flush");
     sentry_set_tag("hang.trigger", "synchronous-disk-flush");
+    sentry_set_tag("chaos.scenario", "hang-app-hang");
 
     // A sizable diagnostic dump attached to the event (~256 KB).
     std::vector<char> dump(256 * 1024);
@@ -322,7 +307,7 @@ void scenario_app_hang(ConsoleLog* console) {
     sentry_value_set_by_key(flush_attrs, "subsystem",
         sentry_value_new_attribute(sentry_value_new_string("telemetry-flush"), nullptr));
     // METRIC: telemetry.flush.queue_depth — one-shot spike matching the app-hang event context.
-    sentry_metrics_gauge("telemetry.flush.queue_depth", 18432, "none", flush_attrs);
+    sentry_metrics_gauge("telemetry.flush.queue_depth", 18432, nullptr, flush_attrs);
 
     for (int i = 0; i < 8; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -335,6 +320,7 @@ void scenario_app_hang(ConsoleLog* console) {
 
 // ----- real distributed-trace checkout to the Flask backend ---------------
 void scenario_backend_error(ConsoleLog* console) {
+    sentry_set_tag("chaos.scenario", "handled-backend-500");
     breadcrumb("checkout", "ordering a replacement plant from the backend");
     const char* base = std::getenv("EMPOWER_BACKEND_URL");
     BackendResult r = checkout(base ? base : "", console);
