@@ -587,23 +587,17 @@ void page_telemetry(AppState& st) {
             dim_text("live from before_send_metric");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
-            char m0[16], m1[16], m2[16], m3[16], m4[16];
-            std::snprintf(m0, sizeof(m0), "%.1f ms", frame_ms);
-            std::snprintf(m1, sizeof(m1), "%.2f", f.cpu_load().latest());
-            std::snprintf(m2, sizeof(m2), "%.1f ms", backend_ms);
-            std::snprintf(m3, sizeof(m3), "%d", f.queue_depth());
-            std::snprintf(m4, sizeof(m4), "%d", f.online_count());
             if (ImGui::BeginTable("mt", 3,
                     ImGuiTableFlags_RowBg | ImGuiTableFlags_PadOuterX)) {
                 ImGui::TableSetupColumn("metric", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthFixed, 80);
                 ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 86);
-                if (metrics.empty()) {
+                if (!st.telemetry || st.telemetry->metrics().empty()) {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     dim_text("waiting for sentry_metrics_* …");
                 } else {
-                    for (const auto& m : metrics) {
+                    for (const auto& m : st.telemetry->metrics()) {
                         ImGui::TableNextRow();
                         metric_table_row(
                             m.name.c_str(), m.value.c_str(), m.type.c_str(), m.blocked);
