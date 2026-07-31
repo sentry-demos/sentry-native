@@ -1,6 +1,10 @@
 #pragma once
 
+#include <functional>
 #include <string>
+#include <unordered_set>
+
+#include <sentry.h>
 
 // SentryManager centralizes initialization, configuration and shutdown of the
 // Sentry Native SDK for the Empower Plant Fleet Control Center demo.
@@ -64,6 +68,17 @@ public:
     static void set_user_consent(bool given);
     static bool has_user_consent();
 
+    // Shared block list for before_send_log (log "level") and
+    // before_send_metric (metric "name").
+    static void set_telemetry_blocked(const char* key, bool blocked);
+    static bool is_telemetry_blocked(const char* key);
+
+    // Optional tap on before_send_log/metric: lets the GUI mirror hook traffic
+    // (e.g. TelemetryFeed) without core knowing about UI. Headless leaves unset.
+    using TelemetryTapFn = std::function<void(sentry_value_t payload, bool blocked)>;
+    static void set_telemetry_tap(TelemetryTapFn on_metric, TelemetryTapFn on_log);
+    static void clear_telemetry_tap();
+
     // The release string actually used (resolved from config/env/built-in).
     static const std::string& release();
 
@@ -75,6 +90,7 @@ private:
     static bool s_initialized;
     static bool s_consent_given;
     static bool s_offline;
+    static std::unordered_set<std::string> s_blocked_telemetry;
     static std::string s_release;
 };
 

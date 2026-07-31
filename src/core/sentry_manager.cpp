@@ -31,6 +31,7 @@ bool SentryManager::s_initialized = false;
 bool SentryManager::s_consent_given = true;
 bool SentryManager::s_offline = false;
 std::string SentryManager::s_release;
+std::unordered_set<std::string> SentryManager::s_blocked_telemetry;
 
 namespace {
 
@@ -83,6 +84,46 @@ sentry_value_t before_send(sentry_value_t event, void* /*hint*/, void* /*closure
     }
     sentry_value_set_by_key(tags, "demo", sentry_value_new_string("empower-plant-native"));
     return event;
+}
+
+// Drop payload when payload[field] is on the block list (user_data).
+sentry_value_t filter_telemetry(
+    sentry_value_t payload, const char* field, void* user_data) {
+    auto* blocked = static_cast<std::unordered_set<std::string>*>(user_data);
+    const char* value =
+        sentry_value_as_string(sentry_value_get_by_key(payload, field));
+    if (value && blocked && blocked->count(value) != 0) {
+        sentry_value_decref(payload);
+        return sentry_value_new_null();
+    }
+    return payload;
+}
+
+SentryManager::TelemetryTapFn g_tap_metric;
+SentryManager::TelemetryTapFn g_tap_log;
+
+sentry_value_t before_send_log(sentry_value_t log, void* user_data) {
+    // Tap first so the UI sees blocked payloads too; then maybe drop upload.
+    if (g_tap_log) {
+        const char* level =
+            sentry_value_as_string(sentry_value_get_by_key(log, "level"));
+        g_tap_log(log, SentryManager::is_telemetry_blocked(level));
+    }
+    return filter_telemetry(log, "level", user_data);
+}
+
+sentry_value_t before_send_metric(sentry_value_t metric, void* user_data) {
+    // Same tap-then-filter order as before_send_log.
+    if (g_tap_metric) {
+        const char* name =
+            sentry_value_as_string(sentry_value_get_by_key(metric, "name"));
+        g_tap_metric(metric, SentryManager::is_telemetry_blocked(name));
+    }
+    return filter_telemetry(metric, "name", user_data);
+}
+
+sentry_value_t before_transaction(sentry_value_t tx, void* user_data) {
+    return filter_telemetry(tx, "transaction", user_data);
 }
 
 sentry_value_t str_attr(const char* s) {
@@ -244,6 +285,12 @@ bool SentryManager::init(const SentryConfig& config) {
     }
 
     sentry_options_set_before_send(options, before_send, nullptr);
+    sentry_options_set_before_send_log(
+        options, before_send_log, &SentryManager::s_blocked_telemetry);
+    sentry_options_set_before_send_metric(
+        options, before_send_metric, &SentryManager::s_blocked_telemetry);
+    sentry_options_set_before_transaction(
+        options, before_transaction, &SentryManager::s_blocked_telemetry);
 
     if (sentry_init(options) != 0) {
         std::fprintf(stderr, "[empower] sentry_init failed\n");
@@ -268,6 +315,8 @@ void SentryManager::shutdown() {
     s_initialized = false;
     s_consent_given = true;
     s_offline = false;
+    s_blocked_telemetry.clear();
+    clear_telemetry_tap();
 }
 
 void SentryManager::app_hang_heartbeat() {
@@ -309,6 +358,31 @@ void SentryManager::set_offline(bool offline) {
 }
 
 bool SentryManager::is_offline() { return s_initialized && s_offline; }
+
+void SentryManager::set_telemetry_blocked(const char* key, bool blocked) {
+    if (!key || !*key) {
+        return;
+    }
+    if (blocked) {
+        s_blocked_telemetry.insert(key);
+    } else {
+        s_blocked_telemetry.erase(key);
+    }
+}
+
+bool SentryManager::is_telemetry_blocked(const char* key) {
+    return key && s_blocked_telemetry.count(key) != 0;
+}
+
+void SentryManager::set_telemetry_tap(TelemetryTapFn on_metric, TelemetryTapFn on_log) {
+    g_tap_metric = std::move(on_metric);
+    g_tap_log = std::move(on_log);
+}
+
+void SentryManager::clear_telemetry_tap() {
+    g_tap_metric = nullptr;
+    g_tap_log = nullptr;
+}
 
 const std::string& SentryManager::release() { return s_release; }
 

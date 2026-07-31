@@ -4,6 +4,7 @@
 #include "app/fleet_model.h"
 #include "app/icons.h"
 #include "app/theme.h"
+#include "app/telemetry_feed.h"
 #include "chaos/chaos.h"
 #include "core/sentry_manager.h"
 #include "core/offline_queue_monitor.h"
@@ -89,7 +90,7 @@ void chip(const char* text, ImVec4 col) {
 // One aligned meter line: [icon LABEL] [bar] [value%], all on one baseline.
 void meter_row(const char* icon, const char* label, float v, ImVec4 col) {
     float full = ImGui::GetContentRegionAvail().x;
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     float fs = ImGui::GetFontSize();
     float row_h = fs + 4;
     ImVec2 p0 = ImGui::GetCursorScreenPos();
@@ -228,7 +229,7 @@ void brand_mark() {
     ImGui::PopStyleColor();
     ImGui::PopFont();
 
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     center_cursor_x(ImGui::CalcTextSize("FLEET CONTROL").x);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
     ImGui::TextUnformatted("FLEET CONTROL");
@@ -290,7 +291,7 @@ void render_sidebar(AppState& st) {
     brand_mark();
     ImGui::Dummy(ImVec2(0, 18));
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     ImGui::TextUnformatted("MENU");
     ImGui::PopFont();
     ImGui::PopStyleColor();
@@ -313,7 +314,7 @@ void render_sidebar(AppState& st) {
     ImGui::SameLine(0, 11);
     ImGui::BeginGroup();
     ImGui::TextUnformatted(st.operator_name.c_str());
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     dim_text("Operator  -  %s", st.environment.c_str());
     status_dot(st.dsn_configured ? theme::color::ok : theme::color::warn, 3.5f);
     ImGui::SameLine();
@@ -380,7 +381,7 @@ void stat_tile(const char* label, const char* value, ImVec4 col) {
     if (begin_card(label, 96)) {
         // Label pinned to the top of the card.
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         ImGui::TextUnformatted(label);
         ImGui::PopFont();
         ImGui::PopStyleColor();
@@ -439,7 +440,7 @@ void page_fleet(AppState& st) {
                 ImGui::TextUnformatted(d.name.c_str());
                 ImGui::PopFont();
                 ImGui::SameLine();
-                ImGui::PushFont(theme::fonts().small);
+                ImGui::PushFont(theme::fonts().caption);
                 ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
                                      ImGui::CalcTextSize(d.firmware.c_str()).x);
                 dim_text("%s", d.firmware.c_str());
@@ -488,7 +489,7 @@ void gauge_card(const char* label, float frac, ImVec4 col, const char* value, fl
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                     ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f), u32(theme::color::text), value);
         ImGui::PopFont();
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         float lw = ImGui::CalcTextSize(label).x;
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                     ImVec2(c.x - lw * 0.5f, c.y + r + 12), u32(theme::color::text_dim), label);
@@ -497,46 +498,60 @@ void gauge_card(const char* label, float frac, ImVec4 col, const char* value, fl
     end_card();
 }
 
-void metric_table_row(const char* name, const char* value, const char* type) {
+void metric_table_row(const char* name, const char* value, const char* type,
+                      bool blocked = false) {
+    const ImVec4 faint = theme::color::text_faint;
     ImGui::TableNextColumn();
-    ImGui::PushFont(theme::fonts().small);
-    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
+    ImGui::PushFont(theme::fonts().caption);
+    ImGui::PushStyleColor(ImGuiCol_Text, blocked ? faint : theme::color::accent_hi);
     ImGui::TextUnformatted(name);
     ImGui::PopStyleColor();
     ImGui::TableNextColumn();
+    if (blocked) ImGui::PushStyleColor(ImGuiCol_Text, faint);
     ImGui::TextUnformatted(value);
+    if (blocked) ImGui::PopStyleColor();
     ImGui::TableNextColumn();
-    dim_text("%s", type);
+    if (blocked) {
+        ImGui::PushStyleColor(ImGuiCol_Text, faint);
+        ImGui::TextUnformatted("blocked");
+        ImGui::PopStyleColor();
+    } else {
+        dim_text("%s", type);
+    }
     ImGui::PopFont();
 }
 
-void log_feed(AppState& st) {
-    if (!st.console) return;
-    ImGui::PushFont(theme::fonts().small);
-    for (const auto& ln : st.console->lines()) {
-        ImVec4 col = theme::color::text_dim;
-        const char* tag = "info";
-        switch (ln.level) {
-            case ConsoleLog::Level::Debug: col = theme::color::text_faint; tag = "debug"; break;
-            case ConsoleLog::Level::Info:  col = theme::color::ok;         tag = "info";  break;
-            case ConsoleLog::Level::Warn:  col = theme::color::warn;       tag = "warn";  break;
-            case ConsoleLog::Level::Error: col = theme::color::danger;     tag = "error"; break;
+void telemetry_log_feed(const TelemetryFeed* feed) {
+    ImGui::PushFont(theme::fonts().caption);
+    if (!feed || feed->logs().empty()) {
+        dim_text("waiting for sentry_log_* …");
+        ImGui::PopFont();
+        return;
+    }
+    for (const auto& ln : feed->logs()) {
+        if (ln.blocked) {
+            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
+            ImGui::Text("%s  blocked  %s", ln.time.c_str(), ln.body.c_str());
+            ImGui::PopStyleColor();
+            continue;
         }
+        ImVec4 level_col = theme::color::text_dim;
+        if (ln.level == "warn") level_col = theme::color::warn;
+        else if (ln.level == "error" || ln.level == "fatal") level_col = theme::color::danger;
+        else if (ln.level == "info") level_col = theme::color::ok;
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
         ImGui::Text("%s", ln.time.c_str());
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, col);
-        ImGui::Text("%-5s", tag);
+        ImGui::PushStyleColor(ImGuiCol_Text, level_col);
+        ImGui::Text("%-5s", ln.level.c_str());
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
-        ImGui::Text("%-8s", ln.source.c_str());
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::TextUnformatted(ln.text.c_str());
+        ImGui::TextUnformatted(ln.body.c_str());
     }
-    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) ImGui::SetScrollHereY(1.0f);
+    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) {
+        ImGui::SetScrollHereY(1.0f);
+    }
     ImGui::PopFont();
 }
 
@@ -568,8 +583,8 @@ void page_telemetry(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("metrics", row_h)) {
             heading(theme::fonts().h2, with_icon(ICON_CHART, "Metrics").c_str());
-            ImGui::PushFont(theme::fonts().small);
-            dim_text("emitted via sentry_metrics_* every 2s");
+            ImGui::PushFont(theme::fonts().caption);
+            dim_text("live from before_send_metric");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
             char m0[16], m1[16], m2[16], m3[16], m4[16];
@@ -583,11 +598,17 @@ void page_telemetry(AppState& st) {
                 ImGui::TableSetupColumn("metric", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthFixed, 80);
                 ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 86);
-                metric_table_row("fleet.frame_time", m0, "distribution");
-                metric_table_row("fleet.cpu_load", m1, "gauge");
-                metric_table_row("fleet.backend_latency", m2, "gauge");
-                metric_table_row("fleet.job_queue_depth", m3, "gauge");
-                metric_table_row("fleet.devices_online", m4, "gauge");
+                if (metrics.empty()) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    dim_text("waiting for sentry_metrics_* …");
+                } else {
+                    for (const auto& m : metrics) {
+                        ImGui::TableNextRow();
+                        metric_table_row(
+                            m.name.c_str(), m.value.c_str(), m.type.c_str(), m.blocked);
+                    }
+                }
                 ImGui::EndTable();
             }
         }
@@ -596,12 +617,12 @@ void page_telemetry(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("logs", row_h)) {
             heading(theme::fonts().h2, with_icon(ICON_TERMINAL, "Logs").c_str());
-            ImGui::PushFont(theme::fonts().small);
-            dim_text("structured logs via sentry_log_*");
+            ImGui::PushFont(theme::fonts().caption);
+            dim_text("live from before_send_log");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
             ImGui::BeginChild("logscroll", ImVec2(0, 0), false);
-            log_feed(st);
+            telemetry_log_feed(st.telemetry);
             ImGui::EndChild();
         }
         end_card();
@@ -628,7 +649,7 @@ void page_pipelines(AppState&) {
             ImGui::PopFont();
             ImGui::SameLine(ImGui::GetContentRegionAvail().x - 64);
             chip("running", r.col);
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             dim_text("%s", r.op);
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 4));
@@ -742,7 +763,7 @@ void chaos_offline_bar(AppState& st) {
         ImGui::TextUnformatted(title);
         ImGui::PopStyleColor();
         ImGui::PopFont();
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
         ImGui::TextUnformatted(hint);
         ImGui::PopStyleColor();
@@ -784,7 +805,7 @@ void chaos_offline_bar(AppState& st) {
             if (queued > 99) std::snprintf(count_buf, sizeof(count_buf), "99+");
             else std::snprintf(count_buf, sizeof(count_buf), "%d", queued);
 
-            ImFont* nfont = theme::fonts().small;
+            ImFont* nfont = theme::fonts().caption;
             const float nsz = 11.f;
             ImVec2 ts = nfont->CalcTextSizeA(nsz, FLT_MAX, 0.f, count_buf);
             const float cr = (queued > 9) ? 8.5f : 7.5f;
@@ -856,7 +877,7 @@ void page_chaos(AppState& st) {
             if (begin_card("c", card_h, ImVec2(14, 10))) {
                 heading(theme::fonts().h2, a.label, col);
                 ImGui::Dummy(ImVec2(0, 1));
-                ImGui::PushFont(theme::fonts().small);
+                ImGui::PushFont(theme::fonts().caption);
                 ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
                 ImGui::PushTextWrapPos(0.0f);
                 ImGui::TextUnformatted(a.desc);
@@ -919,7 +940,7 @@ void feature_row(const char* label) {
     ImGui::SameLine();
     float rx = ImGui::GetContentRegionMax().x - ImGui::CalcTextSize("enabled").x;
     ImGui::SetCursorPosX(rx);
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::ok);
     ImGui::TextUnformatted("enabled");
     ImGui::PopStyleColor();
@@ -952,7 +973,7 @@ void page_settings(AppState& st) {
 
             // GDPR-style consent (Settings) — separate from Chaos Lab Go Offline.
             section("User consent");
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(
@@ -995,12 +1016,33 @@ void page_settings(AppState& st) {
             }
             ImGui::PopFont();
             ImGui::PopStyleColor(4);
-
         }
         end_card();
 
         ImGui::TableNextColumn();
         if (begin_card("right")) {
+            section("Telemetry filters");
+            ImGui::PushFont(theme::fonts().caption);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 4));
+
+            bool block_info = SentryManager::is_telemetry_blocked("info");
+            if (ImGui::Checkbox("Block info logs", &block_info)) {
+                SentryManager::set_telemetry_blocked("info", block_info);
+            }
+            bool block_cpu = SentryManager::is_telemetry_blocked("fleet.cpu_load");
+            if (ImGui::Checkbox("Block fleet.cpu_load metric", &block_cpu)) {
+                SentryManager::set_telemetry_blocked("fleet.cpu_load", block_cpu);
+            }
+            bool block_checkout = SentryManager::is_telemetry_blocked("checkout");
+            if (ImGui::Checkbox("Block checkout transactions", &block_checkout)) {
+                SentryManager::set_telemetry_blocked("checkout", block_checkout);
+            }
+
+            ImGui::PopStyleVar(2);
+            ImGui::PopFont();
+
+            ImGui::Dummy(ImVec2(0, 16));
             section("Enabled features");
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12, 11));
             const char* feats[] = {

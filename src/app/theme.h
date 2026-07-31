@@ -25,7 +25,7 @@ constexpr ImVec4 info      = ImVec4(0.357f, 0.659f, 1.000f, 1.00f); // #5BA8FF
 struct Fonts {
     ImFont* body = nullptr;   // default UI text
     ImFont* bold = nullptr;   // medium-weight body (nav, emphasis)
-    ImFont* small = nullptr;  // captions / labels
+    ImFont* caption = nullptr;  // captions / labels
     ImFont* h1 = nullptr;     // page titles, big numbers
     ImFont* h2 = nullptr;     // card titles / section heads
 };
