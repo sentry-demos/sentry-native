@@ -74,22 +74,44 @@ std::string find_crash_reporter() {
     return "";
 }
 
+// Pre-built event.hook values — allocated at init so on_crash never calls
+// sentry_value_new_* (not async-signal-safe).
+static sentry_value_t g_before_send_hook = sentry_value_new_null();
+static sentry_value_t g_on_crash_hook = sentry_value_new_null();
+static sentry_value_t g_on_crash_tags = sentry_value_new_null();
+
+void init_event_hook_tags() {
+    g_before_send_hook = sentry_value_new_string("before_send");
+    g_on_crash_hook = sentry_value_new_string("on_crash");
+    g_on_crash_tags = sentry_value_new_object();
+    sentry_value_set_by_key(g_on_crash_tags, "event.hook", g_on_crash_hook);
+}
+
 // before_send runs for every event prior to transmission. Here it is a light
 // enrichment hook: it stamps a tag identifying the demo so events are easy to
 // find, and demonstrates where PII scrubbing would live in a real integration.
-static sentry_value_t tag_event(sentry_value_t event, const char* hook_name) {
+static sentry_value_t tag_event(
+    sentry_value_t event, sentry_value_t hook, sentry_value_t fallback_tags) {
     sentry_value_t tags = sentry_value_get_by_key(event, "tags");
+    // Scope tags (demo, app.*) come from sentry_set_tag in apply_global_enrichment.
+    // before_send: SDK merges scope onto the event first, so tags usually exist here
+    //   → else branch sets event.hook on them.
+    // on_crash: this hook runs before scope merge on crash backends, so tags are often
+    //   still missing → if branch attaches fallback_tags (event.hook pre-set at init);
+    //   the SDK then merges scope tags into that object afterward.
     if (sentry_value_is_null(tags)) {
-        tags = sentry_value_new_object();
-        sentry_value_set_by_key(event, "tags", tags);
+        if (!sentry_value_is_null(fallback_tags)) {
+            sentry_value_set_by_key(event, "tags", fallback_tags);
+            sentry_value_incref(fallback_tags);
+        }
+    } else {
+        sentry_value_set_by_key(tags, "event.hook", hook);
     }
-    sentry_value_set_by_key(tags, "demo", sentry_value_new_string("empower-plant-native"));
-    sentry_value_set_by_key(tags, "event.hook", sentry_value_new_string(hook_name));
     return event;
 }
 
 sentry_value_t before_send(sentry_value_t event, void* /*hint*/, void* /*closure*/) {
-    return tag_event(event, "before_send");
+    return tag_event(event, g_before_send_hook, sentry_value_new_null());
 }
 
 // on_crash runs only for fatal crashes; the SDK calls it instead of
@@ -97,7 +119,7 @@ sentry_value_t before_send(sentry_value_t event, void* /*hint*/, void* /*closure
 // event.hook value so crash events are easy to filter in Sentry.
 sentry_value_t on_crash(
     const sentry_ucontext_t* /*uctx*/, sentry_value_t event, void* /*data*/) {
-    return tag_event(event, "on_crash");
+    return tag_event(event, g_on_crash_hook, g_on_crash_tags);
 }
 
 // Signal-safety note:
@@ -200,6 +222,8 @@ void apply_global_enrichment(const SentryConfig& config, const std::string& rele
     sentry_set_attribute("app.platform", str_attr(EMPOWER_PLATFORM));
     sentry_set_attribute("environment", str_attr(config.environment.c_str()));
     sentry_set_attribute("release", str_attr(release.c_str()));
+
+    init_event_hook_tags();
 }
 
 } // namespace
