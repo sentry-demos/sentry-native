@@ -68,6 +68,7 @@ std::string with_icon(const char* icon, const char* label) {
 
 struct FeedbackWidget {
     bool expanded = false;
+    int opened_frame = -1;
     char message[2048] = {};
     float fab_x = 0.0f;
     float fab_y = 0.0f;
@@ -75,6 +76,10 @@ struct FeedbackWidget {
 };
 
 FeedbackWidget g_feedback;
+
+void close_feedback_panel() {
+    g_feedback.expanded = false;
+}
 
 bool draw_feedback_fab(float x, float y, float btn, bool active) {
     ImGuiWindowFlags wf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
@@ -129,8 +134,7 @@ void render_feedback_panel_body(AppState& st, float panel_w) {
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
     if (ImGui::Button("X##feedback_close", ImVec2(24, 24))) {
-        g_feedback.expanded = false;
-        ImGui::CloseCurrentPopup();
+        close_feedback_panel();
     }
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(4);
@@ -182,8 +186,7 @@ void render_feedback_panel_body(AppState& st, float panel_w) {
                                  "User feedback captured (sentry_capture_feedback_with_hint)");
             }
             g_feedback.message[0] = '\0';
-            g_feedback.expanded = false;
-            ImGui::CloseCurrentPopup();
+            close_feedback_panel();
         }
     }
     ImGui::PopStyleColor(4);
@@ -213,6 +216,9 @@ void render_header_feedback(float center_y, float fab, float rx) {
 
     if (draw_feedback_fab(g_feedback.fab_x, g_feedback.fab_y, fab, g_feedback.expanded)) {
         g_feedback.expanded = !g_feedback.expanded;
+        if (g_feedback.expanded) {
+            g_feedback.opened_frame = ImGui::GetFrameCount();
+        }
     }
 }
 
@@ -224,26 +230,45 @@ void render_feedback_overlay(AppState& st) {
     const float margin = 24.0f;
     const float panel_w = 340.0f;
     ImGuiViewport* vp = ImGui::GetMainViewport();
+
+    ImGui::SetNextWindowPos(vp->WorkPos);
+    ImGui::SetNextWindowSize(vp->WorkSize);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.35f));
+    ImGuiWindowFlags scrim_wf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
+                                ImGuiWindowFlags_NoNav;
+    ImGui::Begin("##feedback_scrim", nullptr, scrim_wf);
+    ImGui::InvisibleButton("##feedback_scrim_btn", vp->WorkSize);
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left) &&
+        ImGui::GetFrameCount() > g_feedback.opened_frame) {
+        close_feedback_panel();
+    }
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+
+    if (!g_feedback.expanded) {
+        return;
+    }
+
     ImGui::SetNextWindowPos(
         ImVec2(vp->WorkPos.x + vp->WorkSize.x - margin,
                vp->WorkPos.y + vp->WorkSize.y - margin),
         ImGuiCond_Always, ImVec2(1.0f, 1.0f));
     ImGui::SetNextWindowSize(ImVec2(panel_w, 0), ImGuiCond_Always);
 
-    ImGui::OpenPopup("##feedback_popup");
-
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14, 12));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, theme::color::surface);
     ImGui::PushStyleColor(ImGuiCol_Border, theme::color::border);
-    ImGuiWindowFlags popup_wf = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
-    if (ImGui::BeginPopup("##feedback_popup", popup_wf)) {
-        render_feedback_panel_body(st, panel_w);
-        ImGui::EndPopup();
-    } else {
-        g_feedback.expanded = false;
-    }
+    ImGuiWindowFlags panel_wf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar |
+                                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                                ImGuiWindowFlags_NoNav;
+    ImGui::Begin("##feedback_panel", nullptr, panel_wf);
+    render_feedback_panel_body(st, panel_w);
+    ImGui::End();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
 }
@@ -1244,9 +1269,9 @@ void render_ui(AppState& st) {
     ImGui::EndChild();
     ImGui::PopStyleVar();
 
-    render_feedback_overlay(st);
-
     ImGui::End();
+
+    render_feedback_overlay(st);
 }
 
 } // namespace empower
