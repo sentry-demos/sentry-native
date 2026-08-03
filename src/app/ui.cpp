@@ -143,6 +143,17 @@ void render_feedback_panel_body(AppState& st, float panel_w) {
     ImGui::PopTextWrapPos();
     ImGui::PopFont();
 
+    if (!st.dsn_configured) {
+        ImGui::Dummy(ImVec2(0, 6));
+        ImGui::PushFont(theme::fonts().caption);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::warn);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + panel_w - 28.0f);
+        ImGui::TextUnformatted("SENTRY_DSN is not set - feedback cannot be sent.");
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+    }
+
     ImGui::Dummy(ImVec2(0, 6));
     ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::color::surface_hi);
     ImGui::PushStyleColor(ImGuiCol_Border, theme::color::border);
@@ -152,7 +163,8 @@ void render_feedback_panel_body(AppState& st, float panel_w) {
     ImGui::PopStyleColor(2);
 
     ImGui::Dummy(ImVec2(0, 8));
-    const bool can_send = g_feedback.message[0] != '\0' && st.dsn_configured;
+    const bool has_message = g_feedback.message[0] != '\0';
+    const bool can_send = has_message && st.dsn_configured;
     if (!can_send) {
         ImGui::BeginDisabled();
     }
@@ -177,6 +189,15 @@ void render_feedback_panel_body(AppState& st, float panel_w) {
     ImGui::PopStyleColor(4);
     if (!can_send) {
         ImGui::EndDisabled();
+    }
+
+    if (!has_message) {
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::PushFont(theme::fonts().caption);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+        ImGui::TextUnformatted("Enter a message to send.");
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
     }
 }
 
