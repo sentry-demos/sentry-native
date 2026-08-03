@@ -77,27 +77,27 @@ std::string find_crash_reporter() {
 // before_send runs for every event prior to transmission. Here it is a light
 // enrichment hook: it stamps a tag identifying the demo so events are easy to
 // find, and demonstrates where PII scrubbing would live in a real integration.
-sentry_value_t before_send(sentry_value_t event, void* /*hint*/, void* /*closure*/) {
+static sentry_value_t tag_event(sentry_value_t event, const char* hook_name) {
     sentry_value_t tags = sentry_value_get_by_key(event, "tags");
     if (sentry_value_is_null(tags)) {
         tags = sentry_value_new_object();
         sentry_value_set_by_key(event, "tags", tags);
     }
     sentry_value_set_by_key(tags, "demo", sentry_value_new_string("empower-plant-native"));
-    sentry_value_set_by_key(tags, "event.hook", sentry_value_new_string("before_send"));
+    sentry_value_set_by_key(tags, "event.hook", sentry_value_new_string(hook_name));
     return event;
 }
 
+sentry_value_t before_send(sentry_value_t event, void* /*hint*/, void* /*closure*/) {
+    return tag_event(event, "before_send");
+}
+
+// on_crash runs only for fatal crashes; the SDK calls it instead of
+// before_send on that path. Same demo tagging via tag_event, with a distinct
+// event.hook value so crash events are easy to filter in Sentry.
 sentry_value_t on_crash(
     const sentry_ucontext_t* /*uctx*/, sentry_value_t event, void* /*data*/) {
-    sentry_value_t tags = sentry_value_get_by_key(event, "tags");
-    if (sentry_value_is_null(tags)) {
-        tags = sentry_value_new_object();
-        sentry_value_set_by_key(event, "tags", tags);
-    }
-    sentry_value_set_by_key(tags, "demo", sentry_value_new_string("empower-plant-native"));
-    sentry_value_set_by_key(tags, "event.hook", sentry_value_new_string("on_crash"));
-    return event;
+    return tag_event(event, "on_crash");
 }
 
 // Signal-safety note:

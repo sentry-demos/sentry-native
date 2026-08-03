@@ -127,22 +127,18 @@ void render_feedback_panel_body(AppState& st, float panel_w) {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(theme::color::text, 0.08f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, with_alpha(theme::color::text, 0.14f));
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
     if (ImGui::Button("X##feedback_close", ImVec2(24, 24))) {
         g_feedback.expanded = false;
         ImGui::CloseCurrentPopup();
     }
+    ImGui::PopStyleVar();
     ImGui::PopStyleColor(4);
 
     ImGui::PushFont(theme::fonts().caption);
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + panel_w - 28.0f);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
     ImGui::TextUnformatted("What's on your mind?");
-    ImGui::PopStyleColor();
-    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
-    ImGui::TextUnformatted("SDK: sentry_capture_feedback_with_hint");
-    ImGui::PopStyleColor();
-    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
-    ImGui::TextUnformatted("UI screenshot attached when available.");
     ImGui::PopStyleColor();
     ImGui::PopTextWrapPos();
     ImGui::PopFont();
@@ -1141,19 +1137,6 @@ void page_settings(AppState& st) {
             }
             ImGui::PopFont();
             ImGui::PopStyleColor(4);
-
-            ImGui::Dummy(ImVec2(0, 16));
-            section("Offline demo");
-            ImGui::PushFont(theme::fonts().caption);
-            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
-            ImGui::PushTextWrapPos(0.0f);
-            ImGui::TextUnformatted(
-                "Hold/drain visuals live on Chaos Lab (Go Offline, envelope "
-                "badge, drain animation). That switch does not change this "
-                "consent setting.");
-            ImGui::PopTextWrapPos();
-            ImGui::PopStyleColor();
-            ImGui::PopFont();
         }
         end_card();
 
