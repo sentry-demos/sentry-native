@@ -155,7 +155,11 @@ int main(int argc, char** argv) {
     // disk and attach it so crashes carry a screenshot on every platform.
     const std::string screenshot_path = cfg.database_path + "/screenshot.png";
 #if defined(EMPOWER_HAVE_STB)
-    if (sentry_ok) sentry_attach_file(screenshot_path.c_str());
+    if (sentry_ok) {
+        sentry_attachment_t* screenshot =
+            sentry_attach_file(screenshot_path.c_str());
+        sentry_attachment_set_content_type(screenshot, "image/png");
+    }
 #endif
 
     empower::FleetModel fleet;
@@ -210,7 +214,7 @@ int main(int argc, char** argv) {
                     return o;
                 };
                 int fleet_size = static_cast<int>(fleet.devices().size());
-                sentry_metrics_distribution("fleet.frame_time", dt * 1000.0, "millisecond",
+                sentry_metrics_distribution("fleet.frame_time", dt * 1000.0, SENTRY_UNIT_MILLISECOND,
                                             attr1("renderer", sentry_value_new_string("opengl")));
                 sentry_metrics_gauge("fleet.cpu_load", fleet.cpu_load().latest(), "ratio",
                                      attr1("renderer", sentry_value_new_string("opengl")));
