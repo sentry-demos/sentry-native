@@ -71,8 +71,10 @@ The build produces three binaries (each with the `sentry-crash` daemon copied ne
 | **Attachments** | Calibration blobs and a **live UI screenshot** attached to events on every platform |
 | **Screenshots** | SDK screenshot capture on Windows; offscreen-rendered UI PNG attachment elsewhere |
 | **External crash reporter** | Auto-wires the official [sentry-desktop-crash-reporter](https://github.com/getsentry/sentry-desktop-crash-reporter), themed for Empower Plant |
-| **User feedback** | Collected through the external crash reporter |
+| **User feedback** | Runtime capture via the API (`sentry_capture_feedback_with_hint`); crash-time feedback via the external crash reporter |
 | **Before-send hooks** | `before_send`, `before_send_log`, `before_send_metric`, and `before_transaction` — SDK callbacks invoked on each payload before upload; return the value to send (optionally modified) or `null` to drop it client-side for PII scrubbing, enrichment, or filtering logs, metrics, and transactions |
+| **On-crash hook** | Separate crash-only callback (`sentry_options_set_on_crash`); replaces `before_send` for fatal crashes so enrichment and filtering can differ by event type |
+| **Crashed-last-run** | `sentry_get_crashed_last_run()` after `sentry_init()` — detect whether the previous process ended in a crash; `sentry_clear_crashed_last_run()` resets the marker for the next run |
 | **Offline caching** | `SENTRY_CACHE_KEEP_ALWAYS` + **Go Offline** and  **Revoke Consent** toggles; non-fatal events queue under `.sentry-native/cache/` and drain when back online / consent is restored
 
 | Telemetry | Chaos Lab |

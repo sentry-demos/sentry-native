@@ -177,6 +177,10 @@ int main(int argc, char** argv) {
                  sentry_ok ? "Sentry native backend initialized"
                            : "Sentry init failed (events will not be sent)");
     console.push(empower::ConsoleLog::Level::Info, "session", "session started");
+    if (sentry_ok && empower::SentryManager::crashed_last_run()) {
+        console.push(empower::ConsoleLog::Level::Warn, "sentry",
+                     "previous session ended in a crash (sentry_get_crashed_last_run)");
+    }
 
     empower::AppState state;
     state.fleet = &fleet;
@@ -186,6 +190,9 @@ int main(int argc, char** argv) {
     state.release = empower::SentryManager::release();
     state.dsn_host = dsn_host(dsn);
     state.dsn_configured = !dsn.empty();
+#if defined(EMPOWER_HAVE_STB)
+    state.screenshot_path = screenshot_path;
+#endif
     state.page = start_page;
     state.on_chaos = [&console](const std::string& id) {
         empower::trigger(id, &console);

@@ -20,11 +20,13 @@ struct AppState {
     std::string environment = "production";
     std::string release;
     std::string dsn_host;       // masked ingest host, for the Settings page
+    std::string screenshot_path; // live UI PNG for feedback attachments
     bool dsn_configured = false;
 
     // Navigation.
     int page = 0;               // index into the sidebar nav
     int selected_device = -1;
+    bool dismiss_crash_banner = false;
 
     // Invoked when a Chaos Lab action is triggered. The scenario id is a stable
     // string key; the handler decides what actually happens.

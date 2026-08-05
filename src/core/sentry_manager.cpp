@@ -28,6 +28,7 @@
 namespace empower {
 
 bool SentryManager::s_initialized = false;
+bool SentryManager::s_crashed_last_run = false;
 bool SentryManager::s_consent_given = true;
 bool SentryManager::s_offline = false;
 std::string SentryManager::s_release;
@@ -73,19 +74,64 @@ std::string find_crash_reporter() {
     return "";
 }
 
+// Pre-built event.hook values — allocated at init so on_crash never calls
+// sentry_value_new_* (not async-signal-safe).
+static sentry_value_t g_before_send_hook = sentry_value_new_null();
+static sentry_value_t g_on_crash_hook = sentry_value_new_null();
+static sentry_value_t g_on_crash_tags = sentry_value_new_null();
+
+void init_event_hook_tags() {
+    g_before_send_hook = sentry_value_new_string("before_send");
+    g_on_crash_hook = sentry_value_new_string("on_crash");
+    g_on_crash_tags = sentry_value_new_object();
+    sentry_value_set_by_key(g_on_crash_tags, "event.hook", g_on_crash_hook);
+}
+
 // before_send runs for every event prior to transmission. Here it is a light
 // enrichment hook: it stamps a tag identifying the demo so events are easy to
 // find, and demonstrates where PII scrubbing would live in a real integration.
-sentry_value_t before_send(sentry_value_t event, void* /*hint*/, void* /*closure*/) {
+static sentry_value_t tag_event(
+    sentry_value_t event, sentry_value_t hook, sentry_value_t fallback_tags) {
     sentry_value_t tags = sentry_value_get_by_key(event, "tags");
+    // Scope tags (demo, app.*) come from sentry_set_tag in apply_global_enrichment.
+    // before_send: SDK merges scope onto the event first, so tags usually exist here
+    //   → else branch sets event.hook on them.
+    // on_crash: this hook runs before scope merge on crash backends, so tags are often
+    //   still missing → if branch attaches fallback_tags (event.hook pre-set at init);
+    //   the SDK then merges scope tags into that object afterward.
     if (sentry_value_is_null(tags)) {
-        tags = sentry_value_new_object();
-        sentry_value_set_by_key(event, "tags", tags);
+        if (!sentry_value_is_null(fallback_tags)) {
+            sentry_value_set_by_key(event, "tags", fallback_tags);
+            sentry_value_incref(fallback_tags);
+        }
+    } else {
+        sentry_value_set_by_key(tags, "event.hook", hook);
     }
-    sentry_value_set_by_key(tags, "demo", sentry_value_new_string("empower-plant-native"));
     return event;
 }
 
+sentry_value_t before_send(sentry_value_t event, void* /*hint*/, void* /*closure*/) {
+    return tag_event(event, g_before_send_hook, sentry_value_new_null());
+}
+
+// on_crash runs only for fatal crashes; the SDK calls it instead of
+// before_send on that path. Same demo tagging via tag_event, with a distinct
+// event.hook value so crash events are easy to filter in Sentry.
+sentry_value_t on_crash(
+    const sentry_ucontext_t* /*uctx*/, sentry_value_t event, void* /*data*/) {
+    return tag_event(event, g_on_crash_hook, g_on_crash_tags);
+}
+
+// Signal-safety note:
+// before_transaction (and before_send / on_crash) may run
+// while the SDK is handling a crash — inside a signal handler or Windows
+// exception filter. In that context only async-signal-safe code is allowed: no
+// malloc, mutexes, or C++ containers like std::unordered_set (they can deadlock
+// if the crashing thread held the heap lock). This helper uses
+// std::unordered_set, which is fine for the demo's log/metric filters on normal
+// threads, but not for production crash paths. A real integration would look up
+// blocked keys with fixed C strings and sentry_value_* APIs only.
+//
 // Drop payload when payload[field] is on the block list (user_data).
 sentry_value_t filter_telemetry(
     sentry_value_t payload, const char* field, void* user_data) {
@@ -176,6 +222,8 @@ void apply_global_enrichment(const SentryConfig& config, const std::string& rele
     sentry_set_attribute("app.platform", str_attr(EMPOWER_PLATFORM));
     sentry_set_attribute("environment", str_attr(config.environment.c_str()));
     sentry_set_attribute("release", str_attr(release.c_str()));
+
+    init_event_hook_tags();
 }
 
 } // namespace
@@ -294,9 +342,17 @@ bool SentryManager::init(const SentryConfig& config) {
     sentry_options_set_before_transaction(
         options, before_transaction, &SentryManager::s_blocked_telemetry);
 
+    // The on_crash callback replaces the before_send callback for crash events.
+    sentry_options_set_on_crash(options, on_crash, nullptr);
+
     if (sentry_init(options) != 0) {
         std::fprintf(stderr, "[empower] sentry_init failed\n");
         return false;
+    }
+
+    s_crashed_last_run = sentry_get_crashed_last_run() == 1;
+    if (s_crashed_last_run) {
+        sentry_clear_crashed_last_run();
     }
 
     // Start with uploads allowed: consent given, demo offline off.
@@ -315,6 +371,7 @@ void SentryManager::shutdown() {
     }
     sentry_close();
     s_initialized = false;
+    s_crashed_last_run = false;
     s_consent_given = true;
     s_offline = false;
     s_blocked_telemetry.clear();
@@ -389,5 +446,32 @@ void SentryManager::clear_telemetry_tap() {
 const std::string& SentryManager::release() { return s_release; }
 
 bool SentryManager::initialized() { return s_initialized; }
+
+bool SentryManager::crashed_last_run() { return s_crashed_last_run; }
+
+bool SentryManager::capture_feedback(
+    const char* message, const char* contact_email, const char* name,
+    const char* attachment_path) {
+    if (!s_initialized || !message || !*message) {
+        return false;
+    }
+
+    sentry_value_t feedback = sentry_value_new_feedback(
+        message,
+        (contact_email && *contact_email) ? contact_email : nullptr,
+        (name && *name) ? name : nullptr,
+        nullptr);
+
+    sentry_hint_t* hint = nullptr;
+    if (attachment_path && *attachment_path && file_exists(attachment_path)) {
+        hint = sentry_hint_new();
+        if (hint) {
+            sentry_hint_attach_file(hint, attachment_path);
+        }
+    }
+
+    sentry_capture_feedback_with_hint(feedback, hint);
+    return true;
+}
 
 } // namespace empower
