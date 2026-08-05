@@ -2,6 +2,7 @@
 
 #include "app/console_log.h"
 
+#include <chrono>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -142,11 +143,19 @@ BackendResult checkout(const std::string& base_url, ConsoleLog* console) {
 
     if (console) console->push(ConsoleLog::Level::Info, "checkout", "POST " + url);
 
+    // Without sentry_set_span, this log would not pick up the checkout trace —
+    // it would inherit whatever trace (if any) was already on the scope.
+    sentry_set_span(span);
+    sentry_log_info("checkout: POST /checkout in progress", sentry_value_new_null());
+
     // Propagate sentry-trace / baggage from the span so the backend continues
     // this same trace.
     std::vector<Header> headers;
     sentry_span_iter_headers(span, collect_header, &headers);
+    const auto t0 = std::chrono::steady_clock::now();
     perform_post(url, body, headers, result);
+    const double elapsed_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - t0).count();
 
     sentry_span_set_data(span, "http.response.status_code",
                          sentry_value_new_int32(static_cast<int32_t>(result.status)));
@@ -156,6 +165,16 @@ BackendResult checkout(const std::string& base_url, ConsoleLog* console) {
     sentry_transaction_set_status(tx, result.ok ? SENTRY_SPAN_STATUS_OK
                                                 : SENTRY_SPAN_STATUS_INTERNAL_ERROR);
     sentry_transaction_finish(tx);
+
+    char status[8];
+    std::snprintf(status, sizeof(status), "%ld", result.status);
+    sentry_value_t metric_attrs = sentry_value_new_object();
+    sentry_value_set_by_key(metric_attrs, "status_code",
+        sentry_value_new_attribute(sentry_value_new_string(status), nullptr));
+    // METRIC: checkout.requests — HTTP checkout attempts, grouped by status_code.
+    sentry_metrics_count("checkout.requests", 1, metric_attrs);
+    // METRIC: checkout.duration — end-to-end POST latency in ms, grouped by status_code.
+    sentry_metrics_distribution("checkout.duration", elapsed_ms, SENTRY_UNIT_MILLISECOND, metric_attrs);
 
     return result;
 }

@@ -7,6 +7,7 @@ project(empower-fleet
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -44,7 +45,7 @@ message(STATUS "Empower release: ${EMPOWER_RELEASE}")
 # ---------------------------------------------------------------------------
 option(EMPOWER_BUILD_GUI "Build the ImGui Fleet Control Center GUI" ON)
 option(EMPOWER_BUILD_SMOKE "Build the connectivity smoke-test binary" ON)
-set(EMPOWER_SENTRY_NATIVE_VERSION "0.15.2" CACHE STRING "sentry-native release tag to fetch")
+set(EMPOWER_SENTRY_NATIVE_VERSION "0.16.0" CACHE STRING "sentry-native release tag to fetch")
 
 include(FetchContent)
 

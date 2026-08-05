@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -50,9 +51,12 @@ void set_device_context() {
 }
 
 // Sets up the common scope for a scenario and logs the opening breadcrumb.
+// Crash/hang events read global scope at capture time; chaos.scenario uses a
+// crash- prefix. Handled events override with soft- on a local scope.
 void arm(const char* id, const char* transaction, const char* opening,
          ConsoleLog* console, ConsoleLog::Level level) {
-    sentry_set_tag("chaos.scenario", id);
+    const std::string scenario_tag = std::string("crash-") + id;
+    sentry_set_tag("chaos.scenario", scenario_tag.c_str());
     sentry_set_transaction(transaction);
     // Deterministic grouping: every run of a scenario collapses into one issue
     // (so the convoluted-chain crash, whose crash site varies, stays a single
@@ -76,6 +80,8 @@ EMPOWER_NOINLINE void read_device_register(volatile int* reg) {
 }
 
 void scenario_null_deref() {
+    sentry_scope_t* scope = sentry_local_scope_new();
+    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     int* reg = nullptr;
     read_device_register(reg);
 }
@@ -106,6 +112,8 @@ void unmap_buffer(char* p, size_t n) {
 }
 
 void scenario_use_after_free() {
+    sentry_scope_t* scope = sentry_local_scope_new();
+    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     // The device sample buffer is mapped directly from the OS, so releasing it
     // unmaps the pages and a later access faults deterministically (a realistic
     // UAF surfaced on a different thread than the one that released it).
@@ -127,6 +135,8 @@ EMPOWER_NOINLINE int resolve_dependencies(volatile int depth) {
 }
 
 void scenario_stack_overflow() {
+    sentry_scope_t* scope = sentry_local_scope_new();
+    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     breadcrumb("scheduler", "resolving device dependency graph");
     volatile int sink = resolve_dependencies(0);
     (void)sink;
@@ -144,6 +154,8 @@ EMPOWER_NOINLINE int compute_yield_per_plant(volatile int plants) {
 }
 
 void scenario_divide_by_zero() {
+    sentry_scope_t* scope = sentry_local_scope_new();
+    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     volatile int result = compute_yield_per_plant(0);
     (void)result;
 }
@@ -156,6 +168,8 @@ EMPOWER_NOINLINE void decode_sensor_frame(char* out, size_t out_len) {
 }
 
 void scenario_heap_corruption() {
+    sentry_scope_t* scope = sentry_local_scope_new();
+    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     char* buf = static_cast<char*>(std::malloc(32));
     decode_sensor_frame(buf, 4096);
     breadcrumb("parser", "releasing decoded frame buffer");
@@ -169,12 +183,17 @@ EMPOWER_NOINLINE void verify_firmware_signature(const char* version) {
         sentry_value_t ev = sentry_value_new_message_event(
             SENTRY_LEVEL_FATAL, "ota",
             "firmware signature check failed - aborting");
-        sentry_capture_event(ev);
+        sentry_scope_t* scope = sentry_local_scope_new();
+        const std::string scenario_tag = std::string("soft-") + "assert-fail";
+        sentry_scope_set_tag(scope, "chaos.scenario", scenario_tag.c_str());
+        sentry_capture_event_with_scope(ev, scope);
         std::abort();
     }
 }
 
 void scenario_assert_fail() {
+    sentry_scope_t* scope = sentry_local_scope_new();
+    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     verify_firmware_signature("0.0.0-tampered");
 }
 
@@ -185,6 +204,8 @@ EMPOWER_NOINLINE void submit_render_commands(volatile float* vertex_buffer) {
 }
 
 void scenario_gpu_stress() {
+    sentry_scope_t* scope = sentry_local_scope_new();
+    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     sentry_value_t gpu = sentry_value_new_object();
     sentry_value_set_by_key(gpu, "name", sentry_value_new_string("EmpowerPlant Display Adapter"));
     sentry_value_set_by_key(gpu, "api_type", sentry_value_new_string("OpenGL"));
@@ -222,12 +243,17 @@ EMPOWER_NOINLINE void dispatch_sensor_sample(DeviceCalibration* cal, int value) 
 }
 
 void scenario_convoluted() {
+    sentry_scope_t* scope = sentry_local_scope_new();
+    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     auto* cal = new DeviceCalibration();
     cal->on_sample = [](int sample) { (void)sample; };
 
     std::vector<uint8_t> blob(64, 0xC0);
-    sentry_attach_bytes(reinterpret_cast<const char*>(blob.data()), blob.size(),
-                        "calibration-blob.bin");
+    sentry_attachment_t* attachment = sentry_attach_bytes(
+        reinterpret_cast<const char*>(blob.data()), blob.size(),
+        "calibration-blob.bin");
+    sentry_attachment_set_type(attachment, SENTRY_ATTACHMENT_TYPE_GENERIC);
+    sentry_attachment_set_content_type(attachment, "application/octet-stream");
 
     breadcrumb("firmware", "operator triggered firmware flash with calibration");
     // The corruption happens off the UI thread, in the flash worker...
@@ -248,9 +274,12 @@ void scenario_convoluted() {
 void scenario_app_hang(ConsoleLog* console) {
     sentry_set_tag("hang.subsystem", "telemetry-flush");
     sentry_set_tag("hang.trigger", "synchronous-disk-flush");
+    sentry_set_tag("chaos.scenario", "hang-app-hang");
 
     // A sizable diagnostic dump attached to the event (~256 KB).
     std::vector<char> dump(256 * 1024);
+    // For TUS large uploads (>= 100 MiB), enable large attachments in
+    // sentry_manager.cpp and attach a file via sentry_attach_file instead.
     for (size_t i = 0; i < dump.size(); ++i)
         dump[i] = static_cast<char>('A' + (i % 26));
     sentry_attach_bytes(dump.data(), dump.size(), "telemetry-flush-dump.txt");
@@ -273,6 +302,13 @@ void scenario_app_hang(ConsoleLog* console) {
         breadcrumb("telemetry", (std::string("flushing telemetry for ") + d).c_str());
 
     breadcrumb("ui", "main thread entering long synchronous flush");
+
+    sentry_value_t flush_attrs = sentry_value_new_object();
+    sentry_value_set_by_key(flush_attrs, "subsystem",
+        sentry_value_new_attribute(sentry_value_new_string("telemetry-flush"), nullptr));
+    // METRIC: telemetry.flush.queue_depth — one-shot spike matching the app-hang event context.
+    sentry_metrics_gauge("telemetry.flush.queue_depth", 18432, nullptr, flush_attrs);
+
     for (int i = 0; i < 8; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         breadcrumb("ui", "still flushing... (main thread blocked)");
@@ -284,19 +320,25 @@ void scenario_app_hang(ConsoleLog* console) {
 
 // ----- real distributed-trace checkout to the Flask backend ---------------
 void scenario_backend_error(ConsoleLog* console) {
+    sentry_set_tag("chaos.scenario", "handled-backend-500");
     breadcrumb("checkout", "ordering a replacement plant from the backend");
     const char* base = std::getenv("EMPOWER_BACKEND_URL");
     BackendResult r = checkout(base ? base : "", console);
 
-    sentry_set_tag("backend", "flask");
     if (!r.ok) {
         char status[8];
         std::snprintf(status, sizeof(status), "%ld", r.status);
-        sentry_set_tag("http.status_code", status);
         sentry_value_t ev = sentry_value_new_message_event(
             SENTRY_LEVEL_ERROR, "checkout",
             "replacement-plant checkout failed at the Flask backend");
-        sentry_capture_event(ev);
+
+        sentry_scope_t* scope = sentry_local_scope_new();
+        const std::string scenario_tag = std::string("soft-") + "backend-500";
+        sentry_scope_set_tag(scope, "chaos.scenario", scenario_tag.c_str());
+        sentry_scope_set_tag(scope, "backend", "flask");
+        sentry_scope_set_tag(scope, "http.status_code", status);
+        sentry_capture_event_with_scope(ev, scope);
+        
         if (console)
             console->push(ConsoleLog::Level::Error, "chaos",
                           "checkout failed (HTTP " + std::string(status) +
@@ -313,7 +355,10 @@ void scenario_message(ConsoleLog* console) {
     sentry_value_t ev = sentry_value_new_message_event(
         SENTRY_LEVEL_INFO, "ops",
         "manual fleet status report requested by operator");
-    sentry_capture_event(ev);
+    sentry_scope_t* scope = sentry_local_scope_new();
+    const std::string scenario_tag = std::string("soft-") + "message";
+    sentry_scope_set_tag(scope, "chaos.scenario", scenario_tag.c_str());
+    sentry_capture_event_with_scope(ev, scope);
     if (console)
         console->push(ConsoleLog::Level::Info, "chaos",
                       "status report captured as a Sentry message");
@@ -339,6 +384,13 @@ const std::vector<ChaosScenario>& scenarios() {
 }
 
 void trigger(const std::string& id, ConsoleLog* console) {
+    // Complete the metrics trifecta (gauge/distribution already emit from the UI loop).
+    sentry_value_t attrs = sentry_value_new_object();
+    sentry_value_set_by_key(attrs, "scenario",
+        sentry_value_new_attribute(sentry_value_new_string(id.c_str()), nullptr));
+    // METRIC: chaos.scenarios_triggered — count per Chaos Lab button press, tagged by scenario id.
+    sentry_metrics_count("chaos.scenarios_triggered", 1, attrs);
+
     if (id == "null-deref") { arm("null-deref", "device.poll", "polling device status register", console, ConsoleLog::Level::Error); scenario_null_deref(); }
     else if (id == "use-after-free") { arm("use-after-free", "ingest.sample", "sampling device buffer after release", console, ConsoleLog::Level::Error); scenario_use_after_free(); }
     else if (id == "stack-overflow") { arm("stack-overflow", "scheduler.resolve", "resolving device dependency graph", console, ConsoleLog::Level::Error); scenario_stack_overflow(); }

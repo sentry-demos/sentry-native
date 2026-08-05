@@ -84,10 +84,19 @@ public:
 
     static bool initialized();
 
+    // True when sentry_init() detected a crash marker from the previous run.
+    static bool crashed_last_run();
+
+    // Programmatic user feedback (sentry_capture_feedback_with_hint). Optional
+    // attachment_path attaches a file via hint (e.g. live UI screenshot PNG).
+    static bool capture_feedback(const char* message, const char* contact_email,
+        const char* name, const char* attachment_path = nullptr);
+
 private:
     static void sync_upload_gate();
 
     static bool s_initialized;
+    static bool s_crashed_last_run;
     static bool s_consent_given;
     static bool s_offline;
     static std::unordered_set<std::string> s_blocked_telemetry;

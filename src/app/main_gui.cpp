@@ -184,7 +184,11 @@ int main(int argc, char** argv) {
     // disk and attach it so crashes carry a screenshot on every platform.
     const std::string screenshot_path = cfg.database_path + "/screenshot.png";
 #if defined(EMPOWER_HAVE_STB)
-    if (sentry_ok) sentry_attach_file(screenshot_path.c_str());
+    if (sentry_ok) {
+        sentry_attachment_t* screenshot =
+            sentry_attach_file(screenshot_path.c_str());
+        sentry_attachment_set_content_type(screenshot, "image/png");
+    }
 #endif
 
     empower::FleetModel fleet;
@@ -202,6 +206,10 @@ int main(int argc, char** argv) {
                  sentry_ok ? "Sentry native backend initialized"
                            : "Sentry init failed (events will not be sent)");
     console.push(empower::ConsoleLog::Level::Info, "session", "session started");
+    if (sentry_ok && empower::SentryManager::crashed_last_run()) {
+        console.push(empower::ConsoleLog::Level::Warn, "sentry",
+                     "previous session ended in a crash (sentry_get_crashed_last_run)");
+    }
 
     empower::AppState state;
     state.fleet = &fleet;
@@ -215,6 +223,9 @@ int main(int argc, char** argv) {
     if (state.sentry_project_url.empty()) {
         state.sentry_project_url = project_url_from_dsn(dsn);
     }
+#if defined(EMPOWER_HAVE_STB)
+    state.screenshot_path = screenshot_path;
+#endif
     state.page = start_page;
     state.on_chaos = [&console](const std::string& id) {
         empower::trigger(id, &console);
@@ -243,7 +254,7 @@ int main(int argc, char** argv) {
                     return o;
                 };
                 int fleet_size = static_cast<int>(fleet.devices().size());
-                sentry_metrics_distribution("fleet.frame_time", dt * 1000.0, "millisecond",
+                sentry_metrics_distribution("fleet.frame_time", dt * 1000.0, SENTRY_UNIT_MILLISECOND,
                                             attr1("renderer", sentry_value_new_string("opengl")));
                 sentry_metrics_gauge("fleet.cpu_load", fleet.cpu_load().latest(), "ratio",
                                      attr1("renderer", sentry_value_new_string("opengl")));
