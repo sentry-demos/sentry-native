@@ -56,7 +56,8 @@ std::string dsn_project_id(const std::string& dsn) {
     return id;
 }
 
-// Project ids are globally unique on Sentry SaaS — enough for ?project= in the UI.
+// A DSN exposes the project id, but not the organization slug. This generic URL
+// only resolves when the last-opened Sentry organization owns that project;
 // SENTRY_PROJECT_URL overrides when you want an exact link (org subdomain, query params).
 std::string project_url_from_dsn(const std::string& dsn) {
     const std::string project = dsn_project_id(dsn);
