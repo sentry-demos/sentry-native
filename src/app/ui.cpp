@@ -1095,55 +1095,102 @@ void chaos_offline_bar(AppState& st) {
     ImGui::Dummy(ImVec2(0, 6));
 }
 
+// Pick columns so cards stay roughly proportional and the last row is as full as possible.
+int chaos_grid_columns(float avail_w, float avail_h, int n, float pad_x, float pad_y) {
+    const float min_w = 220.f;
+    const float min_h = 76.f;
+    const float ideal_aspect = 1.48f; // width / height — slightly wider/shorter cards
+    const int max_cols = column_count(min_w, 4);
+
+    int best = std::max(1, max_cols);
+    float best_score = -1.f;
+    for (int cols = 2; cols <= max_cols; ++cols) {
+        const int rows = (n + cols - 1) / cols;
+        const float col_w = (avail_w - pad_x * 2.f * static_cast<float>(cols))
+            / static_cast<float>(cols);
+        const float card_h = (avail_h - pad_y * 2.f * static_cast<float>(rows))
+            / static_cast<float>(rows);
+        if (col_w < min_w || card_h < min_h) continue;
+
+        const float aspect = col_w / card_h;
+        const float aspect_score = 1.f - std::min(std::abs(aspect - ideal_aspect) / ideal_aspect, 1.f);
+        const int last = (n % cols == 0) ? cols : (n % cols);
+        const float row_fill = static_cast<float>(last) / static_cast<float>(cols);
+        const float score = aspect_score * 0.45f + row_fill * 0.35f
+            + std::min(card_h / 180.f, 1.f) * 0.20f;
+        if (score > best_score) {
+            best_score = score;
+            best = cols;
+        }
+    }
+    return best;
+}
+
 void page_chaos(AppState& st) {
     chaos_offline_bar(st);
 
     const auto& actions = scenarios();
-    int cols = column_count(258, 4);
-    const int rows = std::max(1, (static_cast<int>(actions.size()) + cols - 1) / cols);
+    const int n = static_cast<int>(actions.size());
 
     // Fit the grid into the remaining viewport height (no page scroll).
-    const float gap = 6.f;
-    const float pad = gap * 0.8f;
-    const float avail = ImGui::GetContentRegionAvail().y;
-    float card_h = (avail - pad * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
-    if (card_h > 150.f) card_h = 150.f;
+    const float gap_x = 6.f;
+    const float gap_y = 12.f;
+    const float pad_x = gap_x * 0.8f;
+    const float pad_y = gap_y * 0.8f;
+    const float avail_w = ImGui::GetContentRegionAvail().x;
+    const float avail_h = ImGui::GetContentRegionAvail().y;
+    const int cols = chaos_grid_columns(avail_w, avail_h, n, pad_x, pad_y);
+    const int rows = std::max(1, (n + cols - 1) / cols);
+
+    float card_h = (avail_h - pad_y * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
+    card_h = std::max(76.f, card_h * 0.80f);
 
     if (ImGui::BeginTable("chaos", cols,
                           ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX)) {
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(pad, pad));
-        for (int i = 0; i < (int)actions.size(); ++i) {
-            ImGui::TableNextColumn();
-            const ChaosScenario& a = actions[i];
-            ImVec4 col = severity_color(a.severity);
-            ImGui::PushID(a.id);
-            if (begin_card("c", card_h, ImVec2(14, 10))) {
-                heading(theme::fonts().h2, a.label, col);
-                ImGui::Dummy(ImVec2(0, 1));
-                ImGui::PushFont(theme::fonts().caption);
-                ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
-                ImGui::PushTextWrapPos(0.0f);
-                ImGui::TextUnformatted(a.desc);
-                ImGui::PopTextWrapPos();
-                ImGui::PopStyleColor();
-                ImGui::PopFont();
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(pad_x, pad_y));
+        for (int row = 0; row < rows; ++row) {
+            ImGui::TableNextRow();
+            const int row_start = row * cols;
+            const int row_count = std::min(cols, n - row_start);
+            const int skip = (cols - row_count) / 2;
+            for (int d = 0; d < skip; ++d) ImGui::TableNextColumn();
 
-                float bh = ImGui::GetFrameHeight() + 2;
-                ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - 12);
-                ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
-                ImGui::PushStyleColor(ImGuiCol_Text, col);
-                ImGui::PushFont(theme::fonts().h2);
-                if (ImGui::Button(with_icon(ICON_BOLT, "Trigger fault").c_str(),
-                                  ImVec2(-FLT_MIN, bh)) && st.on_chaos) {
-                    st.on_chaos(a.id);
+            for (int j = 0; j < row_count; ++j) {
+                ImGui::TableNextColumn();
+                const ChaosScenario& a = actions[row_start + j];
+                ImVec4 col = severity_color(a.severity);
+                ImGui::PushID(a.id);
+
+                const float card_pad_y = std::clamp(card_h * 0.06f, 10.f, 16.f);
+                const float btn_margin = std::clamp(card_h * 0.08f, 10.f, 16.f);
+                if (begin_card("c", card_h, ImVec2(14, card_pad_y))) {
+                    heading(theme::fonts().h2, a.label, col);
+                    ImGui::Dummy(ImVec2(0, std::clamp(card_h * 0.02f, 2.f, 6.f)));
+                    ImGui::PushFont(theme::fonts().caption);
+                    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+                    ImGui::PushTextWrapPos(0.0f);
+                    ImGui::TextUnformatted(a.desc);
+                    ImGui::PopTextWrapPos();
+                    ImGui::PopStyleColor();
+                    ImGui::PopFont();
+
+                    const float bh = ImGui::GetFrameHeight() + 2;
+                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - btn_margin);
+                    ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
+                    ImGui::PushStyleColor(ImGuiCol_Text, col);
+                    ImGui::PushFont(theme::fonts().h2);
+                    if (ImGui::Button(with_icon(ICON_BOLT, "Trigger fault").c_str(),
+                                      ImVec2(-FLT_MIN, bh)) && st.on_chaos) {
+                        st.on_chaos(a.id);
+                    }
+                    ImGui::PopFont();
+                    ImGui::PopStyleColor(4);
                 }
-                ImGui::PopFont();
-                ImGui::PopStyleColor(4);
+                end_card();
+                ImGui::PopID();
             }
-            end_card();
-            ImGui::PopID();
         }
         ImGui::PopStyleVar();
         ImGui::EndTable();
