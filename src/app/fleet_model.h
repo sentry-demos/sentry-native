@@ -36,6 +36,15 @@ struct Series {
         head = (head + 1) % kLen;
     }
     float latest() const { return data[(head + kLen - 1) % kLen]; }
+
+    float rolling_avg(int window) const {
+        if (window < 1) window = 1;
+        if (window > kLen) window = kLen;
+        float sum = 0.0f;
+        for (int i = 0; i < window; ++i)
+            sum += data[(head + kLen - 1 - i) % kLen];
+        return sum / static_cast<float>(window);
+    }
 };
 
 // The simulated state behind the dashboard: a fleet of devices plus rolling

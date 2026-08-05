@@ -107,6 +107,7 @@ void apply() {
     c[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
     c[ImGuiCol_Text] = color::text;
     c[ImGuiCol_TextDisabled] = color::text_faint;
+    c[ImGuiCol_TextLink] = color::sentry;
 
     c[ImGuiCol_FrameBg] = color::surface_hi;
     c[ImGuiCol_FrameBgHovered] = ImVec4(0.180f, 0.149f, 0.286f, 1.0f);

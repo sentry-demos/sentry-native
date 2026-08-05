@@ -18,3 +18,7 @@ build
 .DS_Store
 *.swp
 notes
+
+# Local Sentry CLI credentials (copy from .env.local.example)
+.env.local*
+scripts*

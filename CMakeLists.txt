@@ -238,18 +238,34 @@ if(EMPOWER_BUILD_GUI)
             file(REMOVE ${_empower_gendir}/stb_image_write.h)
         endif()
     endif()
-
     add_executable(empower-fleet
         src/app/main_gui.cpp
         src/app/telemetry_feed.cpp
         src/app/theme.cpp
-        src/app/ui.cpp)
+        src/app/ui.cpp
+        src/app/icon/app_icon.cpp)
+    if(APPLE)
+        target_sources(empower-fleet PRIVATE src/app/icon/app_icon_mac.mm)
+    endif()
     target_link_libraries(empower-fleet PRIVATE empower_core imgui)
     target_compile_definitions(empower-fleet PRIVATE GL_SILENCE_DEPRECATION)
     if(EXISTS ${_empower_gendir}/stb_image_write.h)
         target_include_directories(empower-fleet PRIVATE ${_empower_gendir})
         target_compile_definitions(empower-fleet PRIVATE EMPOWER_HAVE_STB=1)
     endif()
+    if(APPLE)
+        target_link_libraries(empower-fleet PRIVATE "-framework Cocoa")
+    endif()
+    if(WIN32)
+        target_sources(empower-fleet PRIVATE assets/icon/app_icon.rc)
+    endif()
+    add_custom_command(TARGET empower-fleet POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_FILE_DIR:empower-fleet>/assets/icon
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/icon/app-icon.png
+            $<TARGET_FILE_DIR:empower-fleet>/assets/icon/app-icon.png
+        COMMENT "Bundling app icon next to empower-fleet")
     empower_bundle_daemon(empower-fleet)
     empower_codesign(empower-fleet)
 endif()

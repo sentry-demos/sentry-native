@@ -350,6 +350,64 @@ void center_cursor_x(float content_w) {
     if (avail > content_w) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - content_w) * 0.5f);
 }
 
+constexpr float kScrollLane = 12.f;
+
+// Overlay scrollbar in the host window's right padding band. Call before EndChild while
+// the scroll child is still the active window. Hides the built-in bar (NoScrollbar) so
+// layout width never changes; wheel scrolling still works on the child.
+void overlay_vscrollbar(float lane_w) {
+    const float scroll_max = ImGui::GetScrollMaxY();
+    if (scroll_max <= 0.f) return;
+
+    const ImVec2 wpos = ImGui::GetWindowPos();
+    const ImVec2 wsize = ImGui::GetWindowSize();
+    const float x0 = wpos.x + wsize.x;
+    const float x1 = x0 + lane_w;
+    const float y0 = wpos.y;
+    const float y1 = wpos.y + wsize.y;
+    const float track_h = y1 - y0;
+
+    const float grab_h = std::max(28.f, track_h * track_h / (track_h + scroll_max));
+    const float scroll_y = ImGui::GetScrollY();
+    const float grab_y0 = y0 + (track_h - grab_h) * (scroll_y / scroll_max);
+    const float grab_y1 = grab_y0 + grab_h;
+
+    ImGuiIO& io = ImGui::GetIO();
+    const bool track_hov = io.MousePos.x >= x0 && io.MousePos.x <= x1 &&
+                           io.MousePos.y >= y0 && io.MousePos.y <= y1;
+    const bool grab_hov = track_hov && io.MousePos.y >= grab_y0 && io.MousePos.y <= grab_y1;
+
+    ImDrawList* fg = ImGui::GetForegroundDrawList();
+    fg->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), u32(with_alpha(theme::color::border, 0.22f)), 3.f);
+    const ImU32 grab_col = u32(grab_hov || track_hov ? theme::color::accent : theme::color::border);
+    fg->AddRectFilled(ImVec2(x0 + 2.f, grab_y0), ImVec2(x1 - 2.f, grab_y1), grab_col, 3.f);
+
+    ImGui::PushID("overlay_vscroll");
+    ImGuiStorage* storage = ImGui::GetStateStorage();
+    const ImGuiID drag_id = ImGui::GetID("drag");
+    bool dragging = storage->GetBool(drag_id, false);
+
+    if (ImGui::IsMouseClicked(0) && track_hov) {
+        if (grab_hov) {
+            storage->SetBool(drag_id, true);
+            dragging = true;
+        } else {
+            const float t = (io.MousePos.y - y0 - grab_h * 0.5f) / std::max(1.f, track_h - grab_h);
+            ImGui::SetScrollY(std::clamp(t, 0.f, 1.f) * scroll_max);
+        }
+    }
+    if (dragging) {
+        if (ImGui::IsMouseDown(0)) {
+            const float scrollable = std::max(1.f, track_h - grab_h);
+            ImGui::SetScrollY(std::clamp(scroll_y + io.MouseDelta.y * scroll_max / scrollable,
+                                          0.f, scroll_max));
+        } else {
+            storage->SetBool(drag_id, false);
+        }
+    }
+    ImGui::PopID();
+}
+
 // ---- Sidebar -------------------------------------------------------------
 void brand_mark() {
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -485,6 +543,7 @@ void render_header(AppState& st) {
     float h1h = ImGui::GetTextLineHeight();
     ImGui::PopFont();
     heading(theme::fonts().h1, with_icon(kNav[st.page].icon, kNav[st.page].label).c_str());
+    ImVec2 after_title = ImGui::GetCursorScreenPos();
 
     // Right-aligned status pill, vertically centered on the title.
     float cy = tp.y + h1h * 0.5f;
@@ -518,6 +577,11 @@ void render_header(AppState& st) {
     dl->AddText(ImGui::GetFont(), fs, ImVec2(x, cy - fs * 0.5f), u32(theme::color::accent_hi), env);
     ImGui::PopFont();
 
+    ImGui::SetCursorScreenPos(a);
+    if (ImGui::InvisibleButton("##fleet_status", ImVec2(w, h))) st.page = 0;
+    if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+    ImGui::SetCursorScreenPos(after_title);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
     ImGui::TextUnformatted(kNav[st.page].subtitle);
     ImGui::PopStyleColor();
@@ -742,18 +806,20 @@ void telemetry_log_feed(const TelemetryFeed* feed) {
 
 void page_telemetry(AppState& st) {
     FleetModel& f = *st.fleet;
+    const float frame_ms = f.frame_time().rolling_avg(24);
+    const float backend_ms = f.net_latency().rolling_avg(24);
     char v0[16], v1[16], v2[16], v3[16];
-    std::snprintf(v0, sizeof(v0), "%.0f", f.frame_time().latest());
+    std::snprintf(v0, sizeof(v0), "%.0f", frame_ms);
     std::snprintf(v1, sizeof(v1), "%.0f%%", f.cpu_load().latest() * 100.0f);
-    std::snprintf(v2, sizeof(v2), "%.0f", f.net_latency().latest());
+    std::snprintf(v2, sizeof(v2), "%.0f", backend_ms);
     std::snprintf(v3, sizeof(v3), "%.0f%%", f.soil_avg().latest() * 100.0f);
 
     const float gauge_h = 150;
     if (ImGui::BeginTable("gauges", 4, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextRow();
-        ImGui::TableNextColumn(); gauge_card("frame time (ms)", f.frame_time().latest() / 33.0f, theme::color::accent, v0, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("frame time (ms)", frame_ms / 33.0f, theme::color::accent, v0, gauge_h);
         ImGui::TableNextColumn(); gauge_card("cpu load", f.cpu_load().latest(), theme::color::info, v1, gauge_h);
-        ImGui::TableNextColumn(); gauge_card("backend latency (ms)", f.net_latency().latest() / 90.0f, theme::color::warn, v2, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("backend latency (ms)", backend_ms / 90.0f, theme::color::warn, v2, gauge_h);
         ImGui::TableNextColumn(); gauge_card("soil moisture", f.soil_avg().latest(), theme::color::ok, v3, gauge_h);
         ImGui::EndTable();
     }
@@ -770,20 +836,17 @@ void page_telemetry(AppState& st) {
             dim_text("live from before_send_metric");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
-            const auto& metrics =
-                st.telemetry ? st.telemetry->metrics()
-                             : std::vector<TelemetryFeed::Metric>{};
             if (ImGui::BeginTable("mt", 3,
                     ImGuiTableFlags_RowBg | ImGuiTableFlags_PadOuterX)) {
                 ImGui::TableSetupColumn("metric", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthFixed, 80);
                 ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 86);
-                if (metrics.empty()) {
+                if (!st.telemetry || st.telemetry->metrics().empty()) {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     dim_text("waiting for sentry_metrics_* …");
                 } else {
-                    for (const auto& m : metrics) {
+                    for (const auto& m : st.telemetry->metrics()) {
                         ImGui::TableNextRow();
                         metric_table_row(
                             m.name.c_str(), m.value.c_str(), m.type.c_str(), m.blocked);
@@ -1032,55 +1095,102 @@ void chaos_offline_bar(AppState& st) {
     ImGui::Dummy(ImVec2(0, 6));
 }
 
+// Pick columns so cards stay roughly proportional and the last row is as full as possible.
+int chaos_grid_columns(float avail_w, float avail_h, int n, float pad_x, float pad_y) {
+    const float min_w = 220.f;
+    const float min_h = 76.f;
+    const float ideal_aspect = 1.48f; // width / height — slightly wider/shorter cards
+    const int max_cols = column_count(min_w, 4);
+
+    int best = std::max(1, max_cols);
+    float best_score = -1.f;
+    for (int cols = 2; cols <= max_cols; ++cols) {
+        const int rows = (n + cols - 1) / cols;
+        const float col_w = (avail_w - pad_x * 2.f * static_cast<float>(cols))
+            / static_cast<float>(cols);
+        const float card_h = (avail_h - pad_y * 2.f * static_cast<float>(rows))
+            / static_cast<float>(rows);
+        if (col_w < min_w || card_h < min_h) continue;
+
+        const float aspect = col_w / card_h;
+        const float aspect_score = 1.f - std::min(std::abs(aspect - ideal_aspect) / ideal_aspect, 1.f);
+        const int last = (n % cols == 0) ? cols : (n % cols);
+        const float row_fill = static_cast<float>(last) / static_cast<float>(cols);
+        const float score = aspect_score * 0.45f + row_fill * 0.35f
+            + std::min(card_h / 180.f, 1.f) * 0.20f;
+        if (score > best_score) {
+            best_score = score;
+            best = cols;
+        }
+    }
+    return best;
+}
+
 void page_chaos(AppState& st) {
     chaos_offline_bar(st);
 
     const auto& actions = scenarios();
-    int cols = column_count(258, 4);
-    const int rows = std::max(1, (static_cast<int>(actions.size()) + cols - 1) / cols);
+    const int n = static_cast<int>(actions.size());
 
     // Fit the grid into the remaining viewport height (no page scroll).
-    const float gap = 8.f;
-    const float avail = ImGui::GetContentRegionAvail().y;
-    const float pad_y = 3.f;
-    float card_h = (avail - pad_y * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
-    if (card_h > 150.f) card_h = 150.f;
+    const float gap_x = 6.f;
+    const float gap_y = 12.f;
+    const float pad_x = gap_x * 0.8f;
+    const float pad_y = gap_y * 0.8f;
+    const float avail_w = ImGui::GetContentRegionAvail().x;
+    const float avail_h = ImGui::GetContentRegionAvail().y;
+    const int cols = chaos_grid_columns(avail_w, avail_h, n, pad_x, pad_y);
+    const int rows = std::max(1, (n + cols - 1) / cols);
+
+    float card_h = (avail_h - pad_y * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
+    card_h = std::max(76.f, card_h * 0.80f);
 
     if (ImGui::BeginTable("chaos", cols,
                           ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX)) {
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(gap * 0.5f, pad_y));
-        for (int i = 0; i < (int)actions.size(); ++i) {
-            ImGui::TableNextColumn();
-            const ChaosScenario& a = actions[i];
-            ImVec4 col = severity_color(a.severity);
-            ImGui::PushID(a.id);
-            if (begin_card("c", card_h, ImVec2(14, 10))) {
-                heading(theme::fonts().h2, a.label, col);
-                ImGui::Dummy(ImVec2(0, 1));
-                ImGui::PushFont(theme::fonts().caption);
-                ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
-                ImGui::PushTextWrapPos(0.0f);
-                ImGui::TextUnformatted(a.desc);
-                ImGui::PopTextWrapPos();
-                ImGui::PopStyleColor();
-                ImGui::PopFont();
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(pad_x, pad_y));
+        for (int row = 0; row < rows; ++row) {
+            ImGui::TableNextRow();
+            const int row_start = row * cols;
+            const int row_count = std::min(cols, n - row_start);
+            const int skip = (cols - row_count) / 2;
+            for (int d = 0; d < skip; ++d) ImGui::TableNextColumn();
 
-                float bh = ImGui::GetFrameHeight() + 2;
-                ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - 12);
-                ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
-                ImGui::PushStyleColor(ImGuiCol_Text, col);
-                ImGui::PushFont(theme::fonts().h2);
-                if (ImGui::Button(with_icon(ICON_BOLT, "Trigger fault").c_str(),
-                                  ImVec2(-FLT_MIN, bh)) && st.on_chaos) {
-                    st.on_chaos(a.id);
+            for (int j = 0; j < row_count; ++j) {
+                ImGui::TableNextColumn();
+                const ChaosScenario& a = actions[row_start + j];
+                ImVec4 col = severity_color(a.severity);
+                ImGui::PushID(a.id);
+
+                const float card_pad_y = std::clamp(card_h * 0.06f, 10.f, 16.f);
+                const float btn_margin = std::clamp(card_h * 0.08f, 10.f, 16.f);
+                if (begin_card("c", card_h, ImVec2(14, card_pad_y))) {
+                    heading(theme::fonts().h2, a.label, col);
+                    ImGui::Dummy(ImVec2(0, std::clamp(card_h * 0.02f, 2.f, 6.f)));
+                    ImGui::PushFont(theme::fonts().caption);
+                    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+                    ImGui::PushTextWrapPos(0.0f);
+                    ImGui::TextUnformatted(a.desc);
+                    ImGui::PopTextWrapPos();
+                    ImGui::PopStyleColor();
+                    ImGui::PopFont();
+
+                    const float bh = ImGui::GetFrameHeight() + 2;
+                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - btn_margin);
+                    ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
+                    ImGui::PushStyleColor(ImGuiCol_Text, col);
+                    ImGui::PushFont(theme::fonts().h2);
+                    if (ImGui::Button(with_icon(ICON_BOLT, "Trigger fault").c_str(),
+                                      ImVec2(-FLT_MIN, bh)) && st.on_chaos) {
+                        st.on_chaos(a.id);
+                    }
+                    ImGui::PopFont();
+                    ImGui::PopStyleColor(4);
                 }
-                ImGui::PopFont();
-                ImGui::PopStyleColor(4);
+                end_card();
+                ImGui::PopID();
             }
-            end_card();
-            ImGui::PopID();
         }
         ImGui::PopStyleVar();
         ImGui::EndTable();
@@ -1094,6 +1204,14 @@ void kv_row(const char* k, const char* v) {
     ImGui::PopStyleColor();
     ImGui::SameLine(190);
     ImGui::TextUnformatted(v);
+}
+
+void kv_link_row(const char* k, const char* label, const char* url) {
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::TextUnformatted(k);
+    ImGui::PopStyleColor();
+    ImGui::SameLine(190);
+    ImGui::TextLinkOpenURL(label, url);
 }
 
 void section(const char* title) {
@@ -1135,6 +1253,11 @@ void page_settings(AppState& st) {
             kv_row("Environment", st.environment.c_str());
             kv_row("Release", st.release.c_str());
             kv_row("Ingest host", st.dsn_configured ? st.dsn_host.c_str() : "(SENTRY_DSN not set)");
+            if (!st.sentry_project_url.empty()) {
+                kv_link_row("Sentry project", "open in Sentry", st.sentry_project_url.c_str());
+            } else if (st.dsn_configured) {
+                kv_row("Sentry project", "(could not parse project id from DSN)");
+            }
             kv_row("Backend", "flask.empower-plant.com");
             ImGui::Dummy(ImVec2(0, 16));
 
@@ -1234,30 +1357,33 @@ void render_ui(AppState& st) {
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                              ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus |
                              ImGuiWindowFlags_NoNavFocus;
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    constexpr ImVec2 kRootPad(5.f, 15.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, kRootPad);
     ImGui::Begin("##root", nullptr, flags);
     ImGui::PopStyleVar();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22, 28));
-    ImGui::BeginChild("sidebar_wrap", ImVec2(252, 0), false,
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(22, 24));
+    ImGui::BeginChild("sidebar_wrap", ImVec2(252, 0), ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     render_sidebar(st);
     ImGui::EndChild();
     ImGui::PopStyleVar();
 
-    ImGui::SameLine(0, 16);
+    ImGui::SameLine(0, 20);
 
-    // The content column spans the full window height (its bottom lines up with
-    // the sidebar's operator card). Pages taller than that scroll inside here
-    // rather than spilling past the bottom edge. Chaos Lab sizes itself to fit,
-    // so it opts out of scrolling.
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(34, 28));
-    ImGuiWindowFlags content_flags = 0;
-    if (st.page == 3) {
-        content_flags |= ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-    }
-    ImGui::BeginChild("content", ImVec2(0, 0), false, content_flags);
+    // Header stays fixed; page body scrolls below it. AlwaysUseWindowPadding reserves
+    // top/bottom inset so widgets don't draw into the padding band. Right padding (15)
+    // is the overlay scrollbar lane (kScrollLane).
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15, 10));
+    ImGui::BeginChild("content", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding,
+                      ImGuiWindowFlags_NoScrollbar);
     render_header(st);
+
+    ImGuiWindowFlags scroll_flags = ImGuiWindowFlags_NoScrollbar;
+    if (st.page == 3) {
+        scroll_flags |= ImGuiWindowFlags_NoScrollWithMouse;
+    }
+    ImGui::BeginChild("content_scroll", ImVec2(0, 0), ImGuiChildFlags_None, scroll_flags);
     crash_last_run_banner(st);
     switch (st.page) {
         case 0: page_fleet(st); break;
@@ -1266,6 +1392,8 @@ void render_ui(AppState& st) {
         case 3: page_chaos(st); break;
         case 4: page_settings(st); break;
     }
+    if (st.page != 3) overlay_vscrollbar(kScrollLane);
+    ImGui::EndChild();
     ImGui::EndChild();
     ImGui::PopStyleVar();
 
