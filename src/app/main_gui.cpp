@@ -18,8 +18,10 @@
 #  include "stb_image_write.h"
 #endif
 
+#include "app/icon/app_icon.h"
 #include "app/console_log.h"
 #include "app/fleet_model.h"
+#include "app/telemetry_feed.h"
 #include "app/theme.h"
 #include "app/ui.h"
 #include "chaos/chaos.h"
@@ -54,7 +56,8 @@ std::string dsn_project_id(const std::string& dsn) {
     return id;
 }
 
-// Project ids are globally unique on Sentry SaaS — enough for ?project= in the UI.
+// A DSN exposes the project id, but not the organization slug. This generic URL
+// only resolves when the last-opened Sentry organization owns that project;
 // SENTRY_PROJECT_URL overrides when you want an exact link (org subdomain, query params).
 std::string project_url_from_dsn(const std::string& dsn) {
     const std::string project = dsn_project_id(dsn);
@@ -140,6 +143,7 @@ int main(int argc, char** argv) {
     }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
+    empower::set_app_icon(window);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -181,12 +185,20 @@ int main(int argc, char** argv) {
     // disk and attach it so crashes carry a screenshot on every platform.
     const std::string screenshot_path = cfg.database_path + "/screenshot.png";
 #if defined(EMPOWER_HAVE_STB)
-    if (sentry_ok) sentry_attach_file(screenshot_path.c_str());
+    if (sentry_ok) {
+        sentry_attachment_t* screenshot =
+            sentry_attach_file(screenshot_path.c_str());
+        sentry_attachment_set_content_type(screenshot, "image/png");
+    }
 #endif
 
     empower::FleetModel fleet;
     fleet.init();
     empower::ConsoleLog console;
+    empower::TelemetryFeed telemetry;
+    if (sentry_ok) {
+        empower::wire_telemetry_feed(telemetry);
+    }
     console.push(empower::ConsoleLog::Level::Info, "boot",
                  "Fleet Control Center online");
     console.push(sentry_ok ? empower::ConsoleLog::Level::Info
@@ -194,16 +206,16 @@ int main(int argc, char** argv) {
                  "sentry",
                  sentry_ok ? "Sentry native backend initialized"
                            : "Sentry init failed (events will not be sent)");
-    // Seed the Telemetry feed with representative recent activity.
     console.push(empower::ConsoleLog::Level::Info, "session", "session started");
-    console.push(empower::ConsoleLog::Level::Info, "metric", "sent fleet.devices_online = 11");
-    console.push(empower::ConsoleLog::Level::Info, "log", "fleet heartbeat: 11 online, queue 6");
-    console.push(empower::ConsoleLog::Level::Debug, "sentry", "flushed 4 envelopes");
-    console.push(empower::ConsoleLog::Level::Info, "metric", "sent fleet.frame_time = 16.4 ms");
+    if (sentry_ok && empower::SentryManager::crashed_last_run()) {
+        console.push(empower::ConsoleLog::Level::Warn, "sentry",
+                     "previous session ended in a crash (sentry_get_crashed_last_run)");
+    }
 
     empower::AppState state;
     state.fleet = &fleet;
     state.console = &console;
+    state.telemetry = sentry_ok ? &telemetry : nullptr;
     state.environment = cfg.environment;
     state.release = empower::SentryManager::release();
     state.dsn_host = dsn_host(dsn);
@@ -212,6 +224,9 @@ int main(int argc, char** argv) {
     if (state.sentry_project_url.empty()) {
         state.sentry_project_url = project_url_from_dsn(dsn);
     }
+#if defined(EMPOWER_HAVE_STB)
+    state.screenshot_path = screenshot_path;
+#endif
     state.page = start_page;
     state.on_chaos = [&console](const std::string& id) {
         empower::trigger(id, &console);
@@ -240,7 +255,7 @@ int main(int argc, char** argv) {
                     return o;
                 };
                 int fleet_size = static_cast<int>(fleet.devices().size());
-                sentry_metrics_distribution("fleet.frame_time", dt * 1000.0, "millisecond",
+                sentry_metrics_distribution("fleet.frame_time", dt * 1000.0, SENTRY_UNIT_MILLISECOND,
                                             attr1("renderer", sentry_value_new_string("opengl")));
                 sentry_metrics_gauge("fleet.cpu_load", fleet.cpu_load().latest(), "ratio",
                                      attr1("renderer", sentry_value_new_string("opengl")));
@@ -305,6 +320,7 @@ int main(int argc, char** argv) {
     glfwDestroyWindow(window);
     glfwTerminate();
 
+    empower::unwire_telemetry_feed();
     empower::SentryManager::shutdown();
     return 0;
 }

@@ -6,6 +6,8 @@ build
 
 # Sentry runtime database / unsent envelopes / minidumps
 .sentry-native/
+.cache/
+.clangd
 /sentry-db
 *.dmp
 
@@ -16,3 +18,7 @@ build
 .DS_Store
 *.swp
 notes
+
+# Local Sentry CLI credentials (copy from .env.local.example)
+.env.local*
+scripts*

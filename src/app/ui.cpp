@@ -4,6 +4,7 @@
 #include "app/fleet_model.h"
 #include "app/icons.h"
 #include "app/theme.h"
+#include "app/telemetry_feed.h"
 #include "chaos/chaos.h"
 #include "core/sentry_manager.h"
 #include "core/offline_queue_monitor.h"
@@ -65,6 +66,213 @@ std::string with_icon(const char* icon, const char* label) {
     return label;
 }
 
+struct FeedbackWidget {
+    bool expanded = false;
+    int opened_frame = -1;
+    char message[2048] = {};
+    float fab_x = 0.0f;
+    float fab_y = 0.0f;
+    float fab = 36.0f;
+};
+
+FeedbackWidget g_feedback;
+
+void close_feedback_panel() {
+    g_feedback.expanded = false;
+}
+
+bool draw_feedback_fab(float x, float y, float btn, bool active) {
+    ImGuiWindowFlags wf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+                          ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
+                          ImGuiWindowFlags_NoBackground;
+
+    ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("##feedback_fab", nullptr, wf);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImVec2 p1(p0.x + btn, p0.y + btn);
+    ImGui::InvisibleButton("##feedback_toggle", ImVec2(btn, btn));
+    const bool hov = ImGui::IsItemHovered();
+    const ImVec4 fill = active || hov ? theme::color::accent_hi : theme::color::accent;
+    const float round = btn * 0.22f;
+    dl->AddRectFilled(p0, p1, u32(fill), round);
+    dl->AddRect(p0, p1, u32(with_alpha(theme::color::text, 0.12f)), round);
+    ImGui::PushFont(theme::fonts().caption);
+    if (theme::has_icons()) {
+        ImVec2 ts = ImGui::CalcTextSize(ICON_BULLHORN);
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                    ImVec2(p0.x + (btn - ts.x) * 0.5f, p0.y + (btn - ts.y) * 0.5f),
+                    u32(theme::color::bg), ICON_BULLHORN);
+    } else {
+        ImVec2 ts = ImGui::CalcTextSize("!");
+        dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                    ImVec2(p0.x + (btn - ts.x) * 0.5f, p0.y + (btn - ts.y) * 0.5f),
+                    u32(theme::color::bg), "!");
+    }
+    ImGui::PopFont();
+    const bool clicked = ImGui::IsItemClicked();
+
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+    return clicked;
+}
+
+void render_feedback_panel_body(AppState& st, float panel_w) {
+    ImGui::PushFont(theme::fonts().h2);
+    ImGui::TextUnformatted("Give Feedback");
+    ImGui::PopFont();
+    const float close_x = ImGui::GetWindowContentRegionMax().x - 26.0f;
+    ImGui::SameLine(close_x);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(theme::color::text, 0.08f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, with_alpha(theme::color::text, 0.14f));
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+    if (ImGui::Button("X##feedback_close", ImVec2(24, 24))) {
+        close_feedback_panel();
+    }
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
+
+    ImGui::PushFont(theme::fonts().caption);
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + panel_w - 28.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+    ImGui::TextUnformatted("What's on your mind?");
+    ImGui::PopStyleColor();
+    ImGui::PopTextWrapPos();
+    ImGui::PopFont();
+
+    if (!st.dsn_configured) {
+        ImGui::Dummy(ImVec2(0, 6));
+        ImGui::PushFont(theme::fonts().caption);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::warn);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + panel_w - 28.0f);
+        ImGui::TextUnformatted("SENTRY_DSN is not set - feedback cannot be sent.");
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+    }
+
+    ImGui::Dummy(ImVec2(0, 6));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::color::surface_hi);
+    ImGui::PushStyleColor(ImGuiCol_Border, theme::color::border);
+    ImGui::InputTextMultiline("##feedback_message", g_feedback.message,
+                              sizeof(g_feedback.message), ImVec2(-FLT_MIN, 72),
+                              ImGuiInputTextFlags_None);
+    ImGui::PopStyleColor(2);
+
+    ImGui::Dummy(ImVec2(0, 8));
+    const bool has_message = g_feedback.message[0] != '\0';
+    const bool can_send = has_message && st.dsn_configured;
+    if (!can_send) {
+        ImGui::BeginDisabled();
+    }
+    ImGui::PushStyleColor(ImGuiCol_Button, theme::color::accent);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, theme::color::accent_hi);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, theme::color::accent);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::bg);
+    if (ImGui::Button("Send Feedback", ImVec2(-FLT_MIN, 34))) {
+        const char* attachment = st.screenshot_path.empty() ? nullptr
+                                                            : st.screenshot_path.c_str();
+        if (SentryManager::capture_feedback(g_feedback.message, nullptr, st.operator_name.c_str(),
+                                            attachment)) {
+            if (st.console) {
+                st.console->push(ConsoleLog::Level::Info, "sentry",
+                                 "User feedback captured (sentry_capture_feedback_with_hint)");
+            }
+            g_feedback.message[0] = '\0';
+            close_feedback_panel();
+        }
+    }
+    ImGui::PopStyleColor(4);
+    if (!can_send) {
+        ImGui::EndDisabled();
+    }
+
+    if (!has_message) {
+        ImGui::Dummy(ImVec2(0, 4));
+        ImGui::PushFont(theme::fonts().caption);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+        ImGui::TextUnformatted("Enter a message to send.");
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+    }
+}
+
+// Megaphone in the header; popup is anchored bottom-right as an overlay.
+void render_header_feedback(float center_y, float fab, float rx) {
+    if (!SentryManager::initialized()) {
+        return;
+    }
+
+    g_feedback.fab = fab;
+    g_feedback.fab_x = rx - fab;
+    g_feedback.fab_y = center_y - fab * 0.5f;
+
+    if (draw_feedback_fab(g_feedback.fab_x, g_feedback.fab_y, fab, g_feedback.expanded)) {
+        g_feedback.expanded = !g_feedback.expanded;
+        if (g_feedback.expanded) {
+            g_feedback.opened_frame = ImGui::GetFrameCount();
+        }
+    }
+}
+
+void render_feedback_overlay(AppState& st) {
+    if (!SentryManager::initialized() || !g_feedback.expanded) {
+        return;
+    }
+
+    const float margin = 24.0f;
+    const float panel_w = 340.0f;
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+
+    ImGui::SetNextWindowPos(vp->WorkPos);
+    ImGui::SetNextWindowSize(vp->WorkSize);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.35f));
+    ImGuiWindowFlags scrim_wf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
+                                ImGuiWindowFlags_NoNav;
+    ImGui::Begin("##feedback_scrim", nullptr, scrim_wf);
+    ImGui::InvisibleButton("##feedback_scrim_btn", vp->WorkSize);
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left) &&
+        ImGui::GetFrameCount() > g_feedback.opened_frame) {
+        close_feedback_panel();
+    }
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+
+    if (!g_feedback.expanded) {
+        return;
+    }
+
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->WorkPos.x + vp->WorkSize.x - margin,
+               vp->WorkPos.y + vp->WorkSize.y - margin),
+        ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+    ImGui::SetNextWindowSize(ImVec2(panel_w, 0), ImGuiCond_Always);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14, 12));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, theme::color::surface);
+    ImGui::PushStyleColor(ImGuiCol_Border, theme::color::border);
+    ImGuiWindowFlags panel_wf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar |
+                                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                                ImGuiWindowFlags_NoNav;
+    ImGui::Begin("##feedback_panel", nullptr, panel_wf);
+    render_feedback_panel_body(st, panel_w);
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+}
+
 void status_dot(ImVec4 col, float radius = 4.5f) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 p = ImGui::GetCursorScreenPos();
@@ -89,7 +297,7 @@ void chip(const char* text, ImVec4 col) {
 // One aligned meter line: [icon LABEL] [bar] [value%], all on one baseline.
 void meter_row(const char* icon, const char* label, float v, ImVec4 col) {
     float full = ImGui::GetContentRegionAvail().x;
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     float fs = ImGui::GetFontSize();
     float row_h = fs + 4;
     ImVec2 p0 = ImGui::GetCursorScreenPos();
@@ -228,7 +436,7 @@ void brand_mark() {
     ImGui::PopStyleColor();
     ImGui::PopFont();
 
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     center_cursor_x(ImGui::CalcTextSize("FLEET CONTROL").x);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
     ImGui::TextUnformatted("FLEET CONTROL");
@@ -290,7 +498,7 @@ void render_sidebar(AppState& st) {
     brand_mark();
     ImGui::Dummy(ImVec2(0, 18));
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     ImGui::TextUnformatted("MENU");
     ImGui::PopFont();
     ImGui::PopStyleColor();
@@ -313,7 +521,7 @@ void render_sidebar(AppState& st) {
     ImGui::SameLine(0, 11);
     ImGui::BeginGroup();
     ImGui::TextUnformatted(st.operator_name.c_str());
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     dim_text("Operator  -  %s", st.environment.c_str());
     status_dot(st.dsn_configured ? theme::color::ok : theme::color::warn, 3.5f);
     ImGui::SameLine();
@@ -348,8 +556,13 @@ void render_header(AppState& st) {
     const float padx = 14, dotr = 4, gap = 9, sep = 12, h = fs + 12;
     float w = padx + dotr * 2 + gap + ow + sep + 1 + sep + ew + padx;
     float rx = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+    const float fab = h;
+    const float cluster_gap = 8.0f;
+    const float pill_r = rx - fab - cluster_gap;
+    const float pill_l = pill_r - w;
+    render_header_feedback(cy, fab, rx);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 a(rx - w, cy - h * 0.5f), b(rx, cy + h * 0.5f);
+    ImVec2 a(pill_l, cy - h * 0.5f), b(pill_r, cy + h * 0.5f);
     dl->AddRectFilled(a, b, u32(theme::color::surface_hi), h * 0.5f);
     dl->AddRect(a, b, u32(theme::color::border), h * 0.5f);
     float x = a.x + padx;
@@ -375,12 +588,49 @@ void render_header(AppState& st) {
     ImGui::Dummy(ImVec2(0, 8));
 }
 
+void crash_last_run_banner(AppState& st) {
+    if (st.dismiss_crash_banner || !SentryManager::crashed_last_run()) {
+        return;
+    }
+
+    if (begin_card("crash_banner", 64, ImVec2(16, 12))) {
+        status_dot(theme::color::danger);
+        ImGui::SameLine(0, 8);
+        ImGui::BeginGroup();
+        ImGui::PushFont(theme::fonts().h2);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::danger);
+        ImGui::TextUnformatted(with_icon(ICON_BUG, "Last session crashed").c_str());
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+        ImGui::PushFont(theme::fonts().caption);
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+        ImGui::TextUnformatted(
+            "sentry_get_crashed_last_run() detected a crash marker from the previous run.");
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+        ImGui::EndGroup();
+
+        const float btn_w = 72.f;
+        const float row_h = ImGui::GetFrameHeight();
+        const float y0 = ImGui::GetWindowPos().y + ImGui::GetStyle().WindowPadding.y;
+        const float y_mid = y0 + (ImGui::GetWindowHeight() - 2.f * ImGui::GetStyle().WindowPadding.y
+                                  - row_h) * 0.5f;
+        ImGui::SetCursorScreenPos(ImVec2(
+            ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - btn_w, y_mid));
+        if (ImGui::Button("Dismiss", ImVec2(btn_w, row_h))) {
+            st.dismiss_crash_banner = true;
+        }
+    }
+    end_card();
+    ImGui::Dummy(ImVec2(0, 6));
+}
+
 // ---- Fleet ---------------------------------------------------------------
 void stat_tile(const char* label, const char* value, ImVec4 col) {
     if (begin_card(label, 96)) {
         // Label pinned to the top of the card.
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         ImGui::TextUnformatted(label);
         ImGui::PopFont();
         ImGui::PopStyleColor();
@@ -439,7 +689,7 @@ void page_fleet(AppState& st) {
                 ImGui::TextUnformatted(d.name.c_str());
                 ImGui::PopFont();
                 ImGui::SameLine();
-                ImGui::PushFont(theme::fonts().small);
+                ImGui::PushFont(theme::fonts().caption);
                 ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
                                      ImGui::CalcTextSize(d.firmware.c_str()).x);
                 dim_text("%s", d.firmware.c_str());
@@ -488,7 +738,7 @@ void gauge_card(const char* label, float frac, ImVec4 col, const char* value, fl
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                     ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f), u32(theme::color::text), value);
         ImGui::PopFont();
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         float lw = ImGui::CalcTextSize(label).x;
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
                     ImVec2(c.x - lw * 0.5f, c.y + r + 12), u32(theme::color::text_dim), label);
@@ -497,46 +747,60 @@ void gauge_card(const char* label, float frac, ImVec4 col, const char* value, fl
     end_card();
 }
 
-void metric_table_row(const char* name, const char* value, const char* type) {
+void metric_table_row(const char* name, const char* value, const char* type,
+                      bool blocked = false) {
+    const ImVec4 faint = theme::color::text_faint;
     ImGui::TableNextColumn();
-    ImGui::PushFont(theme::fonts().small);
-    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
+    ImGui::PushFont(theme::fonts().caption);
+    ImGui::PushStyleColor(ImGuiCol_Text, blocked ? faint : theme::color::accent_hi);
     ImGui::TextUnformatted(name);
     ImGui::PopStyleColor();
     ImGui::TableNextColumn();
+    if (blocked) ImGui::PushStyleColor(ImGuiCol_Text, faint);
     ImGui::TextUnformatted(value);
+    if (blocked) ImGui::PopStyleColor();
     ImGui::TableNextColumn();
-    dim_text("%s", type);
+    if (blocked) {
+        ImGui::PushStyleColor(ImGuiCol_Text, faint);
+        ImGui::TextUnformatted("blocked");
+        ImGui::PopStyleColor();
+    } else {
+        dim_text("%s", type);
+    }
     ImGui::PopFont();
 }
 
-void log_feed(AppState& st) {
-    if (!st.console) return;
-    ImGui::PushFont(theme::fonts().small);
-    for (const auto& ln : st.console->lines()) {
-        ImVec4 col = theme::color::text_dim;
-        const char* tag = "info";
-        switch (ln.level) {
-            case ConsoleLog::Level::Debug: col = theme::color::text_faint; tag = "debug"; break;
-            case ConsoleLog::Level::Info:  col = theme::color::ok;         tag = "info";  break;
-            case ConsoleLog::Level::Warn:  col = theme::color::warn;       tag = "warn";  break;
-            case ConsoleLog::Level::Error: col = theme::color::danger;     tag = "error"; break;
+void telemetry_log_feed(const TelemetryFeed* feed) {
+    ImGui::PushFont(theme::fonts().caption);
+    if (!feed || feed->logs().empty()) {
+        dim_text("waiting for sentry_log_* …");
+        ImGui::PopFont();
+        return;
+    }
+    for (const auto& ln : feed->logs()) {
+        if (ln.blocked) {
+            ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
+            ImGui::Text("%s  blocked  %s", ln.time.c_str(), ln.body.c_str());
+            ImGui::PopStyleColor();
+            continue;
         }
+        ImVec4 level_col = theme::color::text_dim;
+        if (ln.level == "warn") level_col = theme::color::warn;
+        else if (ln.level == "error" || ln.level == "fatal") level_col = theme::color::danger;
+        else if (ln.level == "info") level_col = theme::color::ok;
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_faint);
         ImGui::Text("%s", ln.time.c_str());
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, col);
-        ImGui::Text("%-5s", tag);
+        ImGui::PushStyleColor(ImGuiCol_Text, level_col);
+        ImGui::Text("%-5s", ln.level.c_str());
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, theme::color::accent_hi);
-        ImGui::Text("%-8s", ln.source.c_str());
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::TextUnformatted(ln.text.c_str());
+        ImGui::TextUnformatted(ln.body.c_str());
     }
-    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) ImGui::SetScrollHereY(1.0f);
+    if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 4.0f) {
+        ImGui::SetScrollHereY(1.0f);
+    }
     ImGui::PopFont();
 }
 
@@ -568,26 +832,26 @@ void page_telemetry(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("metrics", row_h)) {
             heading(theme::fonts().h2, with_icon(ICON_CHART, "Metrics").c_str());
-            ImGui::PushFont(theme::fonts().small);
-            dim_text("emitted via sentry_metrics_* every 2s");
+            ImGui::PushFont(theme::fonts().caption);
+            dim_text("live from before_send_metric");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
-            char m0[16], m1[16], m2[16], m3[16], m4[16];
-            std::snprintf(m0, sizeof(m0), "%.1f ms", frame_ms);
-            std::snprintf(m1, sizeof(m1), "%.2f", f.cpu_load().latest());
-            std::snprintf(m2, sizeof(m2), "%.1f ms", backend_ms);
-            std::snprintf(m3, sizeof(m3), "%d", f.queue_depth());
-            std::snprintf(m4, sizeof(m4), "%d", f.online_count());
             if (ImGui::BeginTable("mt", 3,
                     ImGuiTableFlags_RowBg | ImGuiTableFlags_PadOuterX)) {
                 ImGui::TableSetupColumn("metric", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthFixed, 80);
                 ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed, 86);
-                metric_table_row("fleet.frame_time", m0, "distribution");
-                metric_table_row("fleet.cpu_load", m1, "gauge");
-                metric_table_row("fleet.backend_latency", m2, "gauge");
-                metric_table_row("fleet.job_queue_depth", m3, "gauge");
-                metric_table_row("fleet.devices_online", m4, "gauge");
+                if (!st.telemetry || st.telemetry->metrics().empty()) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    dim_text("waiting for sentry_metrics_* …");
+                } else {
+                    for (const auto& m : st.telemetry->metrics()) {
+                        ImGui::TableNextRow();
+                        metric_table_row(
+                            m.name.c_str(), m.value.c_str(), m.type.c_str(), m.blocked);
+                    }
+                }
                 ImGui::EndTable();
             }
         }
@@ -596,12 +860,12 @@ void page_telemetry(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("logs", row_h)) {
             heading(theme::fonts().h2, with_icon(ICON_TERMINAL, "Logs").c_str());
-            ImGui::PushFont(theme::fonts().small);
-            dim_text("structured logs via sentry_log_*");
+            ImGui::PushFont(theme::fonts().caption);
+            dim_text("live from before_send_log");
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 6));
             ImGui::BeginChild("logscroll", ImVec2(0, 0), false);
-            log_feed(st);
+            telemetry_log_feed(st.telemetry);
             ImGui::EndChild();
         }
         end_card();
@@ -628,7 +892,7 @@ void page_pipelines(AppState&) {
             ImGui::PopFont();
             ImGui::SameLine(ImGui::GetContentRegionAvail().x - 64);
             chip("running", r.col);
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             dim_text("%s", r.op);
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 4));
@@ -742,7 +1006,7 @@ void chaos_offline_bar(AppState& st) {
         ImGui::TextUnformatted(title);
         ImGui::PopStyleColor();
         ImGui::PopFont();
-        ImGui::PushFont(theme::fonts().small);
+        ImGui::PushFont(theme::fonts().caption);
         ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
         ImGui::TextUnformatted(hint);
         ImGui::PopStyleColor();
@@ -784,7 +1048,7 @@ void chaos_offline_bar(AppState& st) {
             if (queued > 99) std::snprintf(count_buf, sizeof(count_buf), "99+");
             else std::snprintf(count_buf, sizeof(count_buf), "%d", queued);
 
-            ImFont* nfont = theme::fonts().small;
+            ImFont* nfont = theme::fonts().caption;
             const float nsz = 11.f;
             ImVec2 ts = nfont->CalcTextSizeA(nsz, FLT_MAX, 0.f, count_buf);
             const float cr = (queued > 9) ? 8.5f : 7.5f;
@@ -831,55 +1095,102 @@ void chaos_offline_bar(AppState& st) {
     ImGui::Dummy(ImVec2(0, 6));
 }
 
+// Pick columns so cards stay roughly proportional and the last row is as full as possible.
+int chaos_grid_columns(float avail_w, float avail_h, int n, float pad_x, float pad_y) {
+    const float min_w = 220.f;
+    const float min_h = 76.f;
+    const float ideal_aspect = 1.48f; // width / height — slightly wider/shorter cards
+    const int max_cols = column_count(min_w, 4);
+
+    int best = std::max(1, max_cols);
+    float best_score = -1.f;
+    for (int cols = 2; cols <= max_cols; ++cols) {
+        const int rows = (n + cols - 1) / cols;
+        const float col_w = (avail_w - pad_x * 2.f * static_cast<float>(cols))
+            / static_cast<float>(cols);
+        const float card_h = (avail_h - pad_y * 2.f * static_cast<float>(rows))
+            / static_cast<float>(rows);
+        if (col_w < min_w || card_h < min_h) continue;
+
+        const float aspect = col_w / card_h;
+        const float aspect_score = 1.f - std::min(std::abs(aspect - ideal_aspect) / ideal_aspect, 1.f);
+        const int last = (n % cols == 0) ? cols : (n % cols);
+        const float row_fill = static_cast<float>(last) / static_cast<float>(cols);
+        const float score = aspect_score * 0.45f + row_fill * 0.35f
+            + std::min(card_h / 180.f, 1.f) * 0.20f;
+        if (score > best_score) {
+            best_score = score;
+            best = cols;
+        }
+    }
+    return best;
+}
+
 void page_chaos(AppState& st) {
     chaos_offline_bar(st);
 
     const auto& actions = scenarios();
-    int cols = column_count(258, 4);
-    const int rows = std::max(1, (static_cast<int>(actions.size()) + cols - 1) / cols);
+    const int n = static_cast<int>(actions.size());
 
     // Fit the grid into the remaining viewport height (no page scroll).
-    const float gap = 6.f;
-    const float pad = gap * 0.8f;
-    const float avail = ImGui::GetContentRegionAvail().y;
-    float card_h = (avail - pad * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
-    if (card_h > 150.f) card_h = 150.f;
+    const float gap_x = 6.f;
+    const float gap_y = 12.f;
+    const float pad_x = gap_x * 0.8f;
+    const float pad_y = gap_y * 0.8f;
+    const float avail_w = ImGui::GetContentRegionAvail().x;
+    const float avail_h = ImGui::GetContentRegionAvail().y;
+    const int cols = chaos_grid_columns(avail_w, avail_h, n, pad_x, pad_y);
+    const int rows = std::max(1, (n + cols - 1) / cols);
+
+    float card_h = (avail_h - pad_y * 2.f * static_cast<float>(rows)) / static_cast<float>(rows);
+    card_h = std::max(76.f, card_h * 0.80f);
 
     if (ImGui::BeginTable("chaos", cols,
                           ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoPadOuterX)) {
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(pad, pad));
-        for (int i = 0; i < (int)actions.size(); ++i) {
-            ImGui::TableNextColumn();
-            const ChaosScenario& a = actions[i];
-            ImVec4 col = severity_color(a.severity);
-            ImGui::PushID(a.id);
-            if (begin_card("c", card_h, ImVec2(14, 10))) {
-                heading(theme::fonts().h2, a.label, col);
-                ImGui::Dummy(ImVec2(0, 1));
-                ImGui::PushFont(theme::fonts().small);
-                ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
-                ImGui::PushTextWrapPos(0.0f);
-                ImGui::TextUnformatted(a.desc);
-                ImGui::PopTextWrapPos();
-                ImGui::PopStyleColor();
-                ImGui::PopFont();
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(pad_x, pad_y));
+        for (int row = 0; row < rows; ++row) {
+            ImGui::TableNextRow();
+            const int row_start = row * cols;
+            const int row_count = std::min(cols, n - row_start);
+            const int skip = (cols - row_count) / 2;
+            for (int d = 0; d < skip; ++d) ImGui::TableNextColumn();
 
-                float bh = ImGui::GetFrameHeight() + 2;
-                ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - 12);
-                ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
-                ImGui::PushStyleColor(ImGuiCol_Text, col);
-                ImGui::PushFont(theme::fonts().h2);
-                if (ImGui::Button(with_icon(ICON_BOLT, "Trigger fault").c_str(),
-                                  ImVec2(-FLT_MIN, bh)) && st.on_chaos) {
-                    st.on_chaos(a.id);
+            for (int j = 0; j < row_count; ++j) {
+                ImGui::TableNextColumn();
+                const ChaosScenario& a = actions[row_start + j];
+                ImVec4 col = severity_color(a.severity);
+                ImGui::PushID(a.id);
+
+                const float card_pad_y = std::clamp(card_h * 0.06f, 10.f, 16.f);
+                const float btn_margin = std::clamp(card_h * 0.08f, 10.f, 16.f);
+                if (begin_card("c", card_h, ImVec2(14, card_pad_y))) {
+                    heading(theme::fonts().h2, a.label, col);
+                    ImGui::Dummy(ImVec2(0, std::clamp(card_h * 0.02f, 2.f, 6.f)));
+                    ImGui::PushFont(theme::fonts().caption);
+                    ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
+                    ImGui::PushTextWrapPos(0.0f);
+                    ImGui::TextUnformatted(a.desc);
+                    ImGui::PopTextWrapPos();
+                    ImGui::PopStyleColor();
+                    ImGui::PopFont();
+
+                    const float bh = ImGui::GetFrameHeight() + 2;
+                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - btn_margin);
+                    ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
+                    ImGui::PushStyleColor(ImGuiCol_Text, col);
+                    ImGui::PushFont(theme::fonts().h2);
+                    if (ImGui::Button(with_icon(ICON_BOLT, "Trigger fault").c_str(),
+                                      ImVec2(-FLT_MIN, bh)) && st.on_chaos) {
+                        st.on_chaos(a.id);
+                    }
+                    ImGui::PopFont();
+                    ImGui::PopStyleColor(4);
                 }
-                ImGui::PopFont();
-                ImGui::PopStyleColor(4);
+                end_card();
+                ImGui::PopID();
             }
-            end_card();
-            ImGui::PopID();
         }
         ImGui::PopStyleVar();
         ImGui::EndTable();
@@ -919,7 +1230,7 @@ void feature_row(const char* label) {
     ImGui::SameLine();
     float rx = ImGui::GetContentRegionMax().x - ImGui::CalcTextSize("enabled").x;
     ImGui::SetCursorPosX(rx);
-    ImGui::PushFont(theme::fonts().small);
+    ImGui::PushFont(theme::fonts().caption);
     ImGui::PushStyleColor(ImGuiCol_Text, theme::color::ok);
     ImGui::TextUnformatted("enabled");
     ImGui::PopStyleColor();
@@ -931,7 +1242,7 @@ void page_settings(AppState& st) {
         ImGui::TableNextColumn();
         if (begin_card("left")) {
             section("Sentry SDK");
-            kv_row("SDK", "sentry.native 0.15.2");
+            kv_row("SDK", "sentry.native 0.16.0");
             kv_row("Crash backend", "native (out-of-process)");
             kv_row("Minidump mode", "smart + client stackwalk");
             kv_row("Upload mode", "async");
@@ -952,7 +1263,7 @@ void page_settings(AppState& st) {
 
             // GDPR-style consent (Settings) — separate from Chaos Lab Go Offline.
             section("User consent");
-            ImGui::PushFont(theme::fonts().small);
+            ImGui::PushFont(theme::fonts().caption);
             ImGui::PushStyleColor(ImGuiCol_Text, theme::color::text_dim);
             ImGui::PushTextWrapPos(0.0f);
             ImGui::TextUnformatted(
@@ -995,18 +1306,39 @@ void page_settings(AppState& st) {
             }
             ImGui::PopFont();
             ImGui::PopStyleColor(4);
-
         }
         end_card();
 
         ImGui::TableNextColumn();
         if (begin_card("right")) {
+            section("Telemetry filters");
+            ImGui::PushFont(theme::fonts().caption);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 4));
+
+            bool block_info = SentryManager::is_telemetry_blocked("info");
+            if (ImGui::Checkbox("Block info logs", &block_info)) {
+                SentryManager::set_telemetry_blocked("info", block_info);
+            }
+            bool block_cpu = SentryManager::is_telemetry_blocked("fleet.cpu_load");
+            if (ImGui::Checkbox("Block fleet.cpu_load metric", &block_cpu)) {
+                SentryManager::set_telemetry_blocked("fleet.cpu_load", block_cpu);
+            }
+            bool block_checkout = SentryManager::is_telemetry_blocked("checkout");
+            if (ImGui::Checkbox("Block checkout transactions", &block_checkout)) {
+                SentryManager::set_telemetry_blocked("checkout", block_checkout);
+            }
+
+            ImGui::PopStyleVar(2);
+            ImGui::PopFont();
+
+            ImGui::Dummy(ImVec2(0, 16));
             section("Enabled features");
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12, 11));
             const char* feats[] = {
                 "Performance tracing", "Distributed tracing", "Structured logs",
                 "Metrics", "Sessions / release health", "App-hang detection",
-                "Screenshots", "External crash reporter",
+                "Screenshots", "External crash reporter", "Programmatic user feedback",
                 "User consent", "Offline cache keep", "HTTP retry / drain"};
             for (const char* fe : feats) feature_row(fe);
             ImGui::PopStyleVar();
@@ -1052,6 +1384,7 @@ void render_ui(AppState& st) {
         scroll_flags |= ImGuiWindowFlags_NoScrollWithMouse;
     }
     ImGui::BeginChild("content_scroll", ImVec2(0, 0), ImGuiChildFlags_None, scroll_flags);
+    crash_last_run_banner(st);
     switch (st.page) {
         case 0: page_fleet(st); break;
         case 1: page_telemetry(st); break;
@@ -1065,6 +1398,8 @@ void render_ui(AppState& st) {
     ImGui::PopStyleVar();
 
     ImGui::End();
+
+    render_feedback_overlay(st);
 }
 
 } // namespace empower

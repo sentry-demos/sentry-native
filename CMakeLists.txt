@@ -7,6 +7,7 @@ project(empower-fleet
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -44,7 +45,7 @@ message(STATUS "Empower release: ${EMPOWER_RELEASE}")
 # ---------------------------------------------------------------------------
 option(EMPOWER_BUILD_GUI "Build the ImGui Fleet Control Center GUI" ON)
 option(EMPOWER_BUILD_SMOKE "Build the connectivity smoke-test binary" ON)
-set(EMPOWER_SENTRY_NATIVE_VERSION "0.15.2" CACHE STRING "sentry-native release tag to fetch")
+set(EMPOWER_SENTRY_NATIVE_VERSION "0.16.0" CACHE STRING "sentry-native release tag to fetch")
 
 include(FetchContent)
 
@@ -91,7 +92,9 @@ elseif(WIN32)
 endif()
 
 # Winsock for the remote command server (used on Windows).
+# NOMINMAX: Windows headers define min/max macros that break std::min/std::max.
 if(WIN32)
+    target_compile_definitions(empower_core PUBLIC NOMINMAX)
     target_link_libraries(empower_core PUBLIC ws2_32)
 endif()
 
@@ -235,17 +238,34 @@ if(EMPOWER_BUILD_GUI)
             file(REMOVE ${_empower_gendir}/stb_image_write.h)
         endif()
     endif()
-
     add_executable(empower-fleet
         src/app/main_gui.cpp
+        src/app/telemetry_feed.cpp
         src/app/theme.cpp
-        src/app/ui.cpp)
+        src/app/ui.cpp
+        src/app/icon/app_icon.cpp)
+    if(APPLE)
+        target_sources(empower-fleet PRIVATE src/app/icon/app_icon_mac.mm)
+    endif()
     target_link_libraries(empower-fleet PRIVATE empower_core imgui)
     target_compile_definitions(empower-fleet PRIVATE GL_SILENCE_DEPRECATION)
     if(EXISTS ${_empower_gendir}/stb_image_write.h)
         target_include_directories(empower-fleet PRIVATE ${_empower_gendir})
         target_compile_definitions(empower-fleet PRIVATE EMPOWER_HAVE_STB=1)
     endif()
+    if(APPLE)
+        target_link_libraries(empower-fleet PRIVATE "-framework Cocoa")
+    endif()
+    if(WIN32)
+        target_sources(empower-fleet PRIVATE assets/icon/app_icon.rc)
+    endif()
+    add_custom_command(TARGET empower-fleet POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_FILE_DIR:empower-fleet>/assets/icon
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/icon/app-icon.png
+            $<TARGET_FILE_DIR:empower-fleet>/assets/icon/app-icon.png
+        COMMENT "Bundling app icon next to empower-fleet")
     empower_bundle_daemon(empower-fleet)
     empower_codesign(empower-fleet)
 endif()

@@ -16,3 +16,4 @@
 #define ICON_BATTERY  "\xEF\x88\x80" // f240  battery
 #define ICON_CHECK    "\xEF\x80\x8C" // f00c  enabled
 #define ICON_ENVELOPE "\xEF\x83\xA0" // f0e0  offline queue / envelope
+#define ICON_BULLHORN "\xEF\x82\xA1" // f0a1  user feedback (megaphone)
