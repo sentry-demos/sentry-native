@@ -80,8 +80,6 @@ EMPOWER_NOINLINE void read_device_register(volatile int* reg) {
 }
 
 void scenario_null_deref() {
-    sentry_scope_t* scope = sentry_local_scope_new();
-    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     int* reg = nullptr;
     read_device_register(reg);
 }
@@ -112,8 +110,6 @@ void unmap_buffer(char* p, size_t n) {
 }
 
 void scenario_use_after_free() {
-    sentry_scope_t* scope = sentry_local_scope_new();
-    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     // The device sample buffer is mapped directly from the OS, so releasing it
     // unmaps the pages and a later access faults deterministically (a realistic
     // UAF surfaced on a different thread than the one that released it).
@@ -135,8 +131,6 @@ EMPOWER_NOINLINE int resolve_dependencies(volatile int depth) {
 }
 
 void scenario_stack_overflow() {
-    sentry_scope_t* scope = sentry_local_scope_new();
-    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     breadcrumb("scheduler", "resolving device dependency graph");
     volatile int sink = resolve_dependencies(0);
     (void)sink;
@@ -154,8 +148,6 @@ EMPOWER_NOINLINE int compute_yield_per_plant(volatile int plants) {
 }
 
 void scenario_divide_by_zero() {
-    sentry_scope_t* scope = sentry_local_scope_new();
-    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     volatile int result = compute_yield_per_plant(0);
     (void)result;
 }
@@ -168,8 +160,6 @@ EMPOWER_NOINLINE void decode_sensor_frame(char* out, size_t out_len) {
 }
 
 void scenario_heap_corruption() {
-    sentry_scope_t* scope = sentry_local_scope_new();
-    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     char* buf = static_cast<char*>(std::malloc(32));
     decode_sensor_frame(buf, 4096);
     breadcrumb("parser", "releasing decoded frame buffer");
@@ -192,8 +182,6 @@ EMPOWER_NOINLINE void verify_firmware_signature(const char* version) {
 }
 
 void scenario_assert_fail() {
-    sentry_scope_t* scope = sentry_local_scope_new();
-    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     verify_firmware_signature("0.0.0-tampered");
 }
 
@@ -204,8 +192,6 @@ EMPOWER_NOINLINE void submit_render_commands(volatile float* vertex_buffer) {
 }
 
 void scenario_gpu_stress() {
-    sentry_scope_t* scope = sentry_local_scope_new();
-    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     sentry_value_t gpu = sentry_value_new_object();
     sentry_value_set_by_key(gpu, "name", sentry_value_new_string("EmpowerPlant Display Adapter"));
     sentry_value_set_by_key(gpu, "api_type", sentry_value_new_string("OpenGL"));
@@ -243,8 +229,6 @@ EMPOWER_NOINLINE void dispatch_sensor_sample(DeviceCalibration* cal, int value) 
 }
 
 void scenario_convoluted() {
-    sentry_scope_t* scope = sentry_local_scope_new();
-    sentry_scope_set_tag(scope, "crash.scenario", "will never show up on the crash issue");
     auto* cal = new DeviceCalibration();
     cal->on_sample = [](int sample) { (void)sample; };
 
