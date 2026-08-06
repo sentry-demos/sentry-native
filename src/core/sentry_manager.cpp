@@ -99,12 +99,17 @@ static sentry_value_t tag_event(
     // on_crash: this hook runs before scope merge on crash backends, so tags are often
     //   still missing → if branch attaches fallback_tags (event.hook pre-set at init);
     //   the SDK then merges scope tags into that object afterward.
+    // Both hook and fallback_tags are process-lifetime singletons, so incref
+    // before handing one to set_by_key — that call moves ownership into the
+    // event, and without the extra ref the singleton is freed with the first
+    // event and the second capture writes a dangling value.
     if (sentry_value_is_null(tags)) {
         if (!sentry_value_is_null(fallback_tags)) {
-            sentry_value_set_by_key(event, "tags", fallback_tags);
             sentry_value_incref(fallback_tags);
+            sentry_value_set_by_key(event, "tags", fallback_tags);
         }
     } else {
+        sentry_value_incref(hook);
         sentry_value_set_by_key(tags, "event.hook", hook);
     }
     return event;
