@@ -170,7 +170,8 @@ BackendResult checkout(const std::string& base_url, ConsoleLog* console) {
     std::snprintf(status, sizeof(status), "%ld", result.status);
     sentry_value_t metric_attrs = sentry_value_new_object();
     sentry_value_set_by_key(metric_attrs, "status_code",
-        sentry_value_new_attribute(sentry_value_new_string(status), nullptr));
+        sentry_value_new_attribute(sentry_value_new_string(status), nullptr));\
+    sentry_value_incref(metric_attrs);
     // METRIC: checkout.requests — HTTP checkout attempts, grouped by status_code.
     sentry_metrics_count("checkout.requests", 1, metric_attrs);
     // METRIC: checkout.duration — end-to-end POST latency in ms, grouped by status_code.

@@ -665,11 +665,11 @@ void page_fleet(AppState& st) {
 
     if (ImGui::BeginTable("stats", 4, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextRow();
-        ImGui::TableNextColumn(); stat_tile("DEVICES ONLINE", online, theme::color::ok);
+        ImGui::TableNextColumn(); stat_tile("DEVICES ONLINE", online, theme::color::danger);
         ImGui::TableNextColumn(); stat_tile("ACTIVE ALERTS", alerts,
             f.alert_count() ? theme::color::warn : theme::color::text_dim);
-        ImGui::TableNextColumn(); stat_tile("AVG SOIL MOISTURE", soil, theme::color::accent_hi);
-        ImGui::TableNextColumn(); stat_tile("JOB QUEUE", queue, theme::color::info);
+        ImGui::TableNextColumn(); stat_tile("AVG SOIL MOISTURE", soil, theme::color::ok);
+        ImGui::TableNextColumn(); stat_tile("JOB QUEUE", queue, theme::color::blue);
         ImGui::EndTable();
     }
 
@@ -817,8 +817,8 @@ void page_telemetry(AppState& st) {
     const float gauge_h = 150;
     if (ImGui::BeginTable("gauges", 4, ImGuiTableFlags_SizingStretchSame)) {
         ImGui::TableNextRow();
-        ImGui::TableNextColumn(); gauge_card("frame time (ms)", frame_ms / 33.0f, theme::color::accent, v0, gauge_h);
-        ImGui::TableNextColumn(); gauge_card("cpu load", f.cpu_load().latest(), theme::color::info, v1, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("frame time (ms)", frame_ms / 33.0f, theme::color::blue, v0, gauge_h);
+        ImGui::TableNextColumn(); gauge_card("cpu load", f.cpu_load().latest(), theme::color::danger, v1, gauge_h);
         ImGui::TableNextColumn(); gauge_card("backend latency (ms)", backend_ms / 90.0f, theme::color::warn, v2, gauge_h);
         ImGui::TableNextColumn(); gauge_card("soil moisture", f.soil_avg().latest(), theme::color::ok, v3, gauge_h);
         ImGui::EndTable();
@@ -877,7 +877,7 @@ void page_telemetry(AppState& st) {
 void page_pipelines(AppState&) {
     struct Row { const char* name; const char* op; float speed; ImVec4 col; };
     static const Row rows[] = {
-        {"Image processing", "thumbnail and classify plant photos", 0.30f, theme::color::accent},
+        {"Image processing", "thumbnail and classify plant photos", 0.30f, theme::color::blue},
         {"Sensor pipeline", "ingest soil, light and temperature samples", 0.55f, theme::color::ok},
         {"Firmware flasher", "stage OTA firmware to devices", 0.12f, theme::color::danger},
         {"Telemetry sync", "push rollups to the backend", 0.42f, theme::color::warn},
@@ -913,7 +913,7 @@ ImVec4 severity_color(Severity s) {
     switch (s) {
         case Severity::Crash: return theme::color::danger;
         case Severity::Warning: return theme::color::warn;
-        case Severity::Backend: return theme::color::info;
+        case Severity::Backend: return theme::color::blue;
         case Severity::Message: return theme::color::ok;
     }
     return theme::color::accent;
@@ -1164,6 +1164,15 @@ void page_chaos(AppState& st) {
                 const float card_pad_y = std::clamp(card_h * 0.06f, 10.f, 16.f);
                 const float btn_margin = std::clamp(card_h * 0.08f, 10.f, 16.f);
                 if (begin_card("c", card_h, ImVec2(14, card_pad_y))) {
+                    const float bh = ImGui::GetFrameHeight() + 2;
+                    const float btn_y = ImGui::GetWindowHeight() - bh - btn_margin;
+                    // Same layout as fullscreen; clip so wrapped text cannot paint over the button.
+                    const ImVec2 clip_min = ImGui::GetCursorScreenPos();
+                    const ImVec2 wp = ImGui::GetWindowPos();
+                    ImGui::PushClipRect(
+                        clip_min,
+                        ImVec2(wp.x + ImGui::GetWindowContentRegionMax().x, wp.y + btn_y - 2.f),
+                        true);
                     heading(theme::fonts().h2, a.label, col);
                     ImGui::Dummy(ImVec2(0, std::clamp(card_h * 0.02f, 2.f, 6.f)));
                     ImGui::PushFont(theme::fonts().caption);
@@ -1173,9 +1182,9 @@ void page_chaos(AppState& st) {
                     ImGui::PopTextWrapPos();
                     ImGui::PopStyleColor();
                     ImGui::PopFont();
+                    ImGui::PopClipRect();
 
-                    const float bh = ImGui::GetFrameHeight() + 2;
-                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - btn_margin);
+                    ImGui::SetCursorPosY(btn_y);
                     ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
