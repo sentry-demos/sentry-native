@@ -20,5 +20,6 @@ build*
 notes
 
 # Local Sentry CLI credentials (copy from .env.local.example)
-.env.local*
+.env.local
+!.env.local.example
 scripts*

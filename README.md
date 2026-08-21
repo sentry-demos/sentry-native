@@ -48,6 +48,8 @@ build\empower-fleet.exe
 
 Without a `SENTRY_DSN` the app still runs, but events are dropped instead of being sent. Open the **Chaos Lab** tab and trigger any fault — the `Convoluted Chain` is the headline scenario for Seer.
 
+> **Symbolicated stacks:** local builds need debug files uploaded before Chaos Lab crashes show function names. See [CONTRIBUTING.md — Local debug files](CONTRIBUTING.md#local-debug-files-symbolication).
+
 The build produces three binaries (each with the `sentry-crash` daemon copied next to it):
 
 - `empower-fleet` — the GUI Fleet Control Center
@@ -123,9 +125,9 @@ Two GitHub Actions workflows under [.github/workflows](.github/workflows):
 
 Both require the `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT` and `SENTRY_AUTH_TOKEN` secrets.
 
-## The crash taxonomy
+## Contributing
 
-Every Chaos Lab scenario and the exact fault it produces is documented in [CONTRIBUTING.md](CONTRIBUTING.md).
+Local debug-file upload (symbolicated stacks) and the full Chaos Lab crash taxonomy are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Open source
 
