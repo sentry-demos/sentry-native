@@ -1164,6 +1164,15 @@ void page_chaos(AppState& st) {
                 const float card_pad_y = std::clamp(card_h * 0.06f, 10.f, 16.f);
                 const float btn_margin = std::clamp(card_h * 0.08f, 10.f, 16.f);
                 if (begin_card("c", card_h, ImVec2(14, card_pad_y))) {
+                    const float bh = ImGui::GetFrameHeight() + 2;
+                    const float btn_y = ImGui::GetWindowHeight() - bh - btn_margin;
+                    // Same layout as fullscreen; clip so wrapped text cannot paint over the button.
+                    const ImVec2 clip_min = ImGui::GetCursorScreenPos();
+                    const ImVec2 wp = ImGui::GetWindowPos();
+                    ImGui::PushClipRect(
+                        clip_min,
+                        ImVec2(wp.x + ImGui::GetWindowContentRegionMax().x, wp.y + btn_y - 2.f),
+                        true);
                     heading(theme::fonts().h2, a.label, col);
                     ImGui::Dummy(ImVec2(0, std::clamp(card_h * 0.02f, 2.f, 6.f)));
                     ImGui::PushFont(theme::fonts().caption);
@@ -1173,9 +1182,9 @@ void page_chaos(AppState& st) {
                     ImGui::PopTextWrapPos();
                     ImGui::PopStyleColor();
                     ImGui::PopFont();
+                    ImGui::PopClipRect();
 
-                    const float bh = ImGui::GetFrameHeight() + 2;
-                    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - bh - btn_margin);
+                    ImGui::SetCursorPosY(btn_y);
                     ImGui::PushStyleColor(ImGuiCol_Button, with_alpha(col, 0.16f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, with_alpha(col, 0.30f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, col);
